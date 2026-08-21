@@ -837,9 +837,13 @@ async function main() {
   }
 }
 
-try {
-  await main()
-} catch (error) {
-  console.error(`[install-lefthook] ${error instanceof Error ? error.message : String(error)}`)
-  process.exitCode = 1
+if (process.env.DSH_SKIP_LEFTHOOK_INSTALL === '1' || process.platform === 'android') {
+  console.log('[install-lefthook] skipped on Android/Termux')
+} else {
+  try {
+    await main()
+  } catch (error) {
+    console.error(`[install-lefthook] ${error instanceof Error ? error.message : String(error)}`)
+    process.exitCode = 1
+  }
 }
