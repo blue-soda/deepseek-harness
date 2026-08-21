@@ -90,7 +90,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 }[T]
 ```
 
-Sources: [`packages/core/session/src/types.ts:340`](../packages/core/session/src/types.ts) · [`packages/core/session/src/types.ts:347`](../packages/core/session/src/types.ts) · [`packages/core/session/src/types.ts:376`](../packages/core/session/src/types.ts) · [`packages/core/session/src/types.ts:408`](../packages/core/session/src/types.ts)
+Sources: [`packages/core/session/src/types.ts:459`](../packages/core/session/src/types.ts) · [`packages/core/session/src/types.ts:466`](../packages/core/session/src/types.ts) · [`packages/core/session/src/types.ts:495`](../packages/core/session/src/types.ts) · [`packages/core/session/src/types.ts:527`](../packages/core/session/src/types.ts)
 
 ## Events
 
@@ -215,7 +215,7 @@ Source: [`packages/interaction/user-approval/src/index.ts:67`](../packages/inter
 
 Types: [StreamChunk](subsystems/llm-streaming.md)
 
-Source: [`packages/core/session/src/types.ts:266`](../packages/core/session/src/types.ts)
+Source: [`packages/core/session/src/types.ts:281`](../packages/core/session/src/types.ts)
 
 <a id="assistantmessage--surface"></a>
 
@@ -237,7 +237,7 @@ Source: [`packages/core/session/src/types.ts:266`](../packages/core/session/src/
 
 Types: [TokenUsage](subsystems/llm-streaming.md)
 
-Source: [`packages/core/session/src/types.ts:277`](../packages/core/session/src/types.ts)
+Source: [`packages/core/session/src/types.ts:292`](../packages/core/session/src/types.ts)
 
 ### `command/*`
 
@@ -498,6 +498,178 @@ Source: [`packages/llm/llm-retry/src/types.ts:9`](../packages/llm/llm-retry/src/
 
 Source: [`packages/llm/llm-retry/src/types.ts:11`](../packages/llm/llm-retry/src/types.ts)
 
+### `mobile/*`
+
+<a id="mobileapproval-decided--log-only"></a>
+
+#### `mobile/approval-decided` — log-only
+
+```ts persistence-catalog
+/**
+ * The outcome of a prior `mobile/approval-requested`.
+ * Log-only audit facts for reconstructing human confirmation flow.
+ */
+'mobile/approval-decided': {
+  /** DSH tool call identity that owns this mobile approval request. */
+  callId: CallId
+  /** Android bridge request id carrying the approval dialog. */
+  requestId: string
+  /** Whether the Android user approved the request. */
+  approved: boolean
+  /** Serializable bridge or transport failure, when approval was not granted. */
+  error?: MobileToolErrorLog
+  /** Bridge or client-observed approval duration in milliseconds. */
+  durationMs: number
+}
+```
+
+Types: [CallId](subsystems/core.md)
+
+Source: [`packages/core/session/src/types.ts:409`](../packages/core/session/src/types.ts)
+
+<a id="mobileapproval-requested--log-only"></a>
+
+#### `mobile/approval-requested` — log-only
+
+```ts persistence-catalog
+/**
+ * A mobile `user.confirm` tool call asked the Android user for a decision.
+ * Log-only and tool-private; the model sees only the normal tool result.
+ */
+'mobile/approval-requested': {
+  /** DSH tool call identity that owns this mobile approval request. */
+  callId: CallId
+  /** Android bridge request id carrying the approval dialog. */
+  requestId: string
+  /** Confirmation title shown to the Android user. */
+  title: string
+  /** Confirmation detail shown to the Android user. */
+  detail: string
+  /** Approval timeout forwarded to Android, when supplied by the model. */
+  timeoutMs?: number
+}
+```
+
+Types: [CallId](subsystems/core.md)
+
+Source: [`packages/core/session/src/types.ts:393`](../packages/core/session/src/types.ts)
+
+<a id="mobilebridge-connected--log-only"></a>
+
+#### `mobile/bridge-connected` — log-only
+
+```ts persistence-catalog
+/**
+ * Mobile bridge reachability observed immediately before a tool execution.
+ * Log-only: this does not change model context, but lets replay distinguish
+ * bridge-tool failures from bridge availability drift.
+ */
+'mobile/bridge-connected': {
+  /** DSH tool call identity whose execution observed the bridge. */
+  callId: CallId
+  /** Android bridge request id about to be executed. */
+  requestId: string
+  /** Android bridge tool name, for example `screen.observe` or `input.tap`. */
+  tool: string
+  /** Bridge lifecycle status returned by `/health`. */
+  status: 'stopped' | 'listening' | 'connected' | 'error'
+  /** Android bridge implementation version. */
+  version: string
+  /** Number of tools advertised by the bridge health response. */
+  toolCount: number
+}
+```
+
+Types: [CallId](subsystems/core.md)
+
+Source: [`packages/core/session/src/types.ts:360`](../packages/core/session/src/types.ts)
+
+<a id="mobilebridge-disconnected--log-only"></a>
+
+#### `mobile/bridge-disconnected` — log-only
+
+```ts persistence-catalog
+/**
+ * Mobile bridge health could not be observed before a tool execution.
+ * Log-only: the paired `mobile/tool-result` still records the final tool
+ * outcome when execution is attempted.
+ */
+'mobile/bridge-disconnected': {
+  /** DSH tool call identity whose execution observed the bridge failure. */
+  callId: CallId
+  /** Android bridge request id about to be executed. */
+  requestId: string
+  /** Android bridge tool name, for example `screen.observe` or `input.tap`. */
+  tool: string
+  /** Reachability failure facts. */
+  error: MobileToolErrorLog
+}
+```
+
+Types: [CallId](subsystems/core.md)
+
+Source: [`packages/core/session/src/types.ts:379`](../packages/core/session/src/types.ts)
+
+<a id="mobiletool-request--log-only"></a>
+
+#### `mobile/tool-request` — log-only
+
+```ts persistence-catalog
+/**
+ * Tool-private Android bridge request facts for reconstructing mobile I/O
+ * without changing the generic model-facing `tool/call` surface event.
+ */
+'mobile/tool-request': {
+  /** DSH tool call identity that owns this bridge request. */
+  callId: CallId
+  /** Android bridge request id, usually the same value as `callId`. */
+  requestId: string
+  /** Android bridge tool name, for example `screen.observe` or `input.tap`. */
+  tool: string
+  /** Safety class declared for the Android bridge request. */
+  risk: MobileToolRisk
+  /** Lossless JSON string of the Android bridge arguments sent to the phone. */
+  argumentsJson: string
+  /** Session id forwarded to the Android bridge, when present. */
+  bridgeSessionId?: string
+}
+```
+
+Types: [CallId](subsystems/core.md)
+
+Source: [`packages/core/session/src/types.ts:321`](../packages/core/session/src/types.ts)
+
+<a id="mobiletool-result--log-only"></a>
+
+#### `mobile/tool-result` — log-only
+
+```ts persistence-catalog
+/**
+ * Tool-private Android bridge response facts for reconstructing mobile I/O
+ * without changing the generic model-facing `tool/result` surface event.
+ */
+'mobile/tool-result': {
+  /** DSH tool call identity that owns this bridge response. */
+  callId: CallId
+  /** Android bridge request id paired with `mobile/tool-request`. */
+  requestId: string
+  /** Android bridge tool name, for example `screen.observe` or `input.tap`. */
+  tool: string
+  /** Whether the bridge accepted and completed the request successfully. */
+  ok: boolean
+  /** Lossless JSON string of the Android bridge result payload. */
+  resultJson: string
+  /** Serializable bridge or transport failure, when the request failed. */
+  error?: MobileToolErrorLog
+  /** Bridge or client-observed duration in milliseconds. */
+  durationMs: number
+}
+```
+
+Types: [CallId](subsystems/core.md)
+
+Source: [`packages/core/session/src/types.ts:339`](../packages/core/session/src/types.ts)
+
 ### `permission/*`
 
 <a id="permissionpreset--log-only"></a>
@@ -547,7 +719,7 @@ Source: [`packages/plan/plan-mode/src/index.ts:53`](../packages/plan/plan-mode/s
 'request/context': RequestContext
 ```
 
-Source: [`packages/core/session/src/types.ts:313`](../packages/core/session/src/types.ts)
+Source: [`packages/core/session/src/types.ts:432`](../packages/core/session/src/types.ts)
 
 <a id="requestheader--log-only"></a>
 
@@ -561,7 +733,7 @@ Source: [`packages/core/session/src/types.ts:313`](../packages/core/session/src/
 'request/header': { header: EpochHeader; reason: RequestHeaderReason }
 ```
 
-Source: [`packages/core/session/src/types.ts:308`](../packages/core/session/src/types.ts)
+Source: [`packages/core/session/src/types.ts:427`](../packages/core/session/src/types.ts)
 
 ### `sandbox/*`
 
@@ -636,7 +808,7 @@ Source: [`packages/schedule/schedule/src/types.ts:219`](../packages/schedule/sch
 'session/end-seed': Record<string, never>
 ```
 
-Source: [`packages/core/session/src/types.ts:336`](../packages/core/session/src/types.ts)
+Source: [`packages/core/session/src/types.ts:455`](../packages/core/session/src/types.ts)
 
 <a id="sessiontitle--log-only"></a>
 
@@ -678,7 +850,7 @@ Source: [`packages/session/session-title-llm/src/index.ts:43`](../packages/sessi
 'step/end': { turn: number; step: number }
 ```
 
-Source: [`packages/core/session/src/types.ts:256`](../packages/core/session/src/types.ts)
+Source: [`packages/core/session/src/types.ts:271`](../packages/core/session/src/types.ts)
 
 <a id="stepstart--log-only"></a>
 
@@ -689,7 +861,7 @@ Source: [`packages/core/session/src/types.ts:256`](../packages/core/session/src/
 'step/start': { turn: number; step: number }
 ```
 
-Source: [`packages/core/session/src/types.ts:254`](../packages/core/session/src/types.ts)
+Source: [`packages/core/session/src/types.ts:269`](../packages/core/session/src/types.ts)
 
 ### `subagent/*`
 
@@ -782,7 +954,7 @@ Source: [`packages/experimental/agent-team/src/types.ts:208`](../packages/experi
 
 Types: [TodoItem](subsystems/session.md)
 
-Source: [`packages/core/session/src/types.ts:303`](../packages/core/session/src/types.ts)
+Source: [`packages/core/session/src/types.ts:422`](../packages/core/session/src/types.ts)
 
 ### `tool/*`
 
@@ -801,7 +973,7 @@ Source: [`packages/core/session/src/types.ts:303`](../packages/core/session/src/
 
 Types: [CallId](subsystems/core.md)
 
-Source: [`packages/core/session/src/types.ts:283`](../packages/core/session/src/types.ts)
+Source: [`packages/core/session/src/types.ts:298`](../packages/core/session/src/types.ts)
 
 <a id="toolcode-dispatch--log-only"></a>
 
@@ -876,7 +1048,7 @@ Source: [`packages/core/tools/src/types.ts:40`](../packages/core/tools/src/types
 }
 ```
 
-Source: [`packages/core/session/src/types.ts:295`](../packages/core/session/src/types.ts)
+Source: [`packages/core/session/src/types.ts:310`](../packages/core/session/src/types.ts)
 
 ### `tool-workflow/*`
 
@@ -956,7 +1128,7 @@ Source: [`packages/workflow/tool-workflow/src/types.ts:47`](../packages/workflow
 
 Types: [TurnEndReason](subsystems/session.md)
 
-Source: [`packages/core/session/src/types.ts:252`](../packages/core/session/src/types.ts)
+Source: [`packages/core/session/src/types.ts:267`](../packages/core/session/src/types.ts)
 
 <a id="turnstart--log-only"></a>
 
@@ -972,7 +1144,7 @@ Source: [`packages/core/session/src/types.ts:252`](../packages/core/session/src/
 'turn/start': { turn: number }
 ```
 
-Source: [`packages/core/session/src/types.ts:243`](../packages/core/session/src/types.ts)
+Source: [`packages/core/session/src/types.ts:258`](../packages/core/session/src/types.ts)
 
 ### `user/*`
 
@@ -991,7 +1163,7 @@ Source: [`packages/core/session/src/types.ts:243`](../packages/core/session/src/
 'user/message': UserMessage
 ```
 
-Source: [`packages/core/session/src/types.ts:264`](../packages/core/session/src/types.ts)
+Source: [`packages/core/session/src/types.ts:279`](../packages/core/session/src/types.ts)
 
 ### `web/*`
 

@@ -148,10 +148,16 @@ function validateEvent(
       // Unconstrained: an unbalanced seed legally puts it inside an open turn.
       break
     case 'todo/write':
+    case 'mobile/tool-request':
+    case 'mobile/tool-result':
     case 'request/header':
     case 'request/context': {
       if (trace.openTurn === null) {
         fail(`${event.type} appended outside any open turn (core execution events must be turn-enclosed)`)
+      }
+      if ((event.type === 'mobile/tool-request' || event.type === 'mobile/tool-result')
+        && trace.openStep === null) {
+        fail(`${event.type} appended outside any open step`)
       }
       break
     }

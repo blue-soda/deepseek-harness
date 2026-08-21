@@ -1,0 +1,69 @@
+# The `mobile` agent preset: a mobile-focused coding agent that can operate an
+# Android device through the DeepDroidPilot localhost bridge.
+
+- id: persona
+  name: '@deepseek-ai/dsh-persona'
+  config:
+    text: >-
+      You are a coding agent powered by the {{model}} model. Your working directory is {{cwd}}.
+      You can also observe and operate an attached Android device through the local DeepDroidPilot bridge.
+
+- id: agent-instructions
+  name: '@deepseek-ai/dsh-agent-instructions'
+  config:
+    maxBytes: 65536
+
+- id: tool-bash
+  name: '@deepseek-ai/dsh-tool-bash'
+  disabled: !!js process.platform === 'win32'
+
+- id: tool-pwsh
+  name: '@deepseek-ai/dsh-tool-pwsh'
+  disabled: !!js process.platform !== 'win32'
+
+- id: tool-fs
+  name: '@deepseek-ai/dsh-tool-fs'
+
+- id: tool-fs-search
+  name: '@deepseek-ai/dsh-tool-fs-search'
+  config:
+    sampleOverCapGlobResults: false
+
+- id: tool-todo
+  name: '@deepseek-ai/dsh-tool-todo'
+  config:
+    allowParallelInProgress: true
+
+- id: mobile
+  name: cordis:group
+  group: true
+  isolate:
+    mobile: true
+  config:
+    - id: mobile-runtime
+      name: '@deepseek-ai/dsh-mobile'
+      config:
+        provider: android-http
+
+    - id: mobile-bridge-http
+      name: '@deepseek-ai/dsh-mobile-bridge-http'
+      config:
+        baseUrl: !!js process.env.DSH_ANDROID_BRIDGE_URL ?? 'http://127.0.0.1:8765'
+
+    - id: tool-mobile
+      name: '@deepseek-ai/dsh-tool-mobile'
+      config:
+        observeScreenshotAdbPath: !!js process.env.DSH_MOBILE_OBSERVE_SCREENSHOT_ADB_PATH ?? process.env.DSH_MOBILE_VISION_ADB_PATH ?? 'adb'
+        observeScreenshotAdbSerial: !!js process.env.ANDROID_SERIAL ?? ''
+        observeScreenshotReportsDir: !!js process.env.DSH_MOBILE_OBSERVE_SCREENSHOT_REPORT_DIR ?? ''
+        visualStep: !!js process.env.DSH_MOBILE_VISUAL_STEP === '1'
+        visionModel: !!js process.env.DSH_MOBILE_VISION_MODEL ?? 'deepseek-v4-flash-vision-exp'
+        visionBaseUrl: !!js process.env.DSH_MOBILE_VISION_BASE_URL ?? 'https://api.deepseek.com'
+        visionApiKeyEnv: !!js process.env.DSH_MOBILE_VISION_API_KEY_ENV ?? 'DEEPSEEK_API_KEY'
+        visionKeyFile: !!js process.env.DSH_MOBILE_VISION_KEY_FILE ?? ''
+        visionKeyFileLine: !!js Number(process.env.DSH_MOBILE_VISION_KEY_FILE_LINE ?? '1')
+        visionAdbPath: !!js process.env.DSH_MOBILE_VISION_ADB_PATH ?? 'adb'
+        visionAdbSerial: !!js process.env.ANDROID_SERIAL ?? ''
+        visionReportsDir: !!js process.env.DSH_MOBILE_VISUAL_REPORT_DIR ?? ''
+        visionScreenWidth: !!js Number(process.env.DSH_MOBILE_VISION_SCREEN_WIDTH ?? '1280')
+        visionScreenHeight: !!js Number(process.env.DSH_MOBILE_VISION_SCREEN_HEIGHT ?? '2856')

@@ -1,0 +1,3 @@
+name: 移动端模式
+description: 面向 Android 自动化的 Agent，提供 Shell、文件编辑和 DeepDroidPilot 本机 bridge 工具。
+order: 3

@@ -1728,3 +1728,82 @@ describe('todo/write event', () => {
     expect(replayed.firstLiveSeq).toBe(original.seq)
   })
 })
+
+describe('mobile tool events', () => {
+  it('round-trips bridge request and response facts without joining the model surface', () => {
+    const original = Session.create(SessionId('mobile-log'))
+    original.append('turn/start', { turn: 1 })
+    original.append('step/start', { turn: 1, step: 1 })
+    original.append('tool/call', {
+      turn: 1,
+      step: 1,
+      callId: CallId('tap-1'),
+      name: 'input_tap',
+      arguments: '{"nodePath":"0/1"}',
+    })
+    original.append('mobile/tool-request', {
+      callId: CallId('tap-1'),
+      requestId: 'tap-1',
+      tool: 'input.tap',
+      risk: 'reversible',
+      argumentsJson: '{"nodePath":"0/1"}',
+      bridgeSessionId: 'mobile-log',
+    })
+    original.append('mobile/tool-result', {
+      callId: CallId('tap-1'),
+      requestId: 'tap-1',
+      tool: 'input.tap',
+      ok: true,
+      resultJson: '{"tapped":true}',
+      durationMs: 12,
+    })
+    original.append('mobile/bridge-connected', {
+      callId: CallId('tap-1'),
+      requestId: 'tap-1',
+      tool: 'input.tap',
+      status: 'connected',
+      version: '0.1',
+      toolCount: 1,
+    })
+    original.append('mobile/bridge-disconnected', {
+      callId: CallId('tap-2'),
+      requestId: 'tap-2',
+      tool: 'input.tap',
+      error: { code: 'MOBILE_BRIDGE_REQUEST_FAILED', message: 'bridge offline' },
+    })
+    original.append('mobile/approval-requested', {
+      callId: CallId('confirm-1'),
+      requestId: 'confirm-1',
+      title: 'Send?',
+      detail: 'Approve sending a draft',
+      timeoutMs: 1_000,
+    })
+    original.append('mobile/approval-decided', {
+      callId: CallId('confirm-1'),
+      requestId: 'confirm-1',
+      approved: false,
+      error: { code: 'approval_rejected', message: 'User rejected' },
+      durationMs: 500,
+    })
+
+    expect(original.deriveMessages()).toHaveLength(0)
+    expect(original.surface.nodes).toEqual([])
+
+    original.append('tool/result', {
+      turn: 1,
+      step: 1,
+      message: createToolResultMessage({
+        callId: CallId('tap-1'),
+        content: [{ type: 'text', text: 'input.tap ok in 12ms' }],
+        isError: false,
+      }),
+    }, { surfaceOp: 'append' })
+    original.append('step/end', { turn: 1, step: 1 })
+    original.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
+
+    const replayed = Session.create(SessionId('mobile-log-replay'), [...original.events])
+    expect(replayed.events.filter(event => event.type.startsWith('mobile/')).map(event => event.data))
+      .toEqual(original.events.filter(event => event.type.startsWith('mobile/')).map(event => event.data))
+    expect(replayed.firstLiveSeq).toBe(original.seq)
+  })
+})

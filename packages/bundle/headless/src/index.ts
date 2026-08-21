@@ -31,10 +31,13 @@ export const inject = ['agentDefaultModel', 'agents', 'sessions']
 export interface Config {
   /** The prompt text for the single run. */
   task: string
+  /** Optional agent preset to mount before the one-shot turn starts. */
+  agentPreset?: string
 }
 
 export const Config: z<Config> = z.object({
   task: z.string().required(),
+  agentPreset: z.string(),
 })
 
 /** Outcome of one owned run interval. */
@@ -49,6 +52,10 @@ interface HeadlessIo {
   stderr: { write(chunk: string): unknown }
   /** Request process exit with `code` after the tree disposes. */
   exit(code: number): void
+}
+
+interface AgentPresetsService {
+  mount(agentCtx: Context, id?: string): Promise<unknown>
 }
 
 /** The process streams the runner writes to; tests substitute captures. */
@@ -93,7 +100,7 @@ function fail(io: HeadlessIo, error: unknown): void {
  * @param task - one-shot task text.
  * @param io - process-facing effects.
  */
-async function run(ctx: Context, task: string, io: HeadlessIo): Promise<void> {
+async function run(ctx: Context, config: Config, io: HeadlessIo): Promise<void> {
   // Loader siblings mount concurrently. Await the complete application before
   // creating an Agent so its scoped tools and adapters are not half-composed.
   await ctx.get('loader')?.await()
@@ -104,15 +111,20 @@ async function run(ctx: Context, task: string, io: HeadlessIo): Promise<void> {
   if (agents === undefined || defaultModel === undefined || sessions === undefined) return
 
   const selection = defaultModel.currentSelection()
-  // This bundle composes no preset roster, so the model-facing rows sit in the
-  // host plane and the agent reads them from the global layer. A deployment
-  // that DOES configure one has to join it here first
-  // (@deepseek-ai/dsh-agent-presets README, "Composing a child agent").
+  const agentPreset = config.agentPreset?.trim()
+  const agentPresets = ctx.get('agentPresets') as AgentPresetsService | undefined
+  if (agentPreset !== undefined && agentPreset !== '' && agentPresets === undefined) {
+    throw new Error(`headless-runner: agentPreset "${agentPreset}" requires an agentPresets service`)
+  }
+
   const { agent } = await agents.create({
     sessionId: SessionId(`session-${randomUUID()}`),
     meta: { cwd: process.cwd() },
     agentOptions: { provider: selection.provider, model: selection.model },
-    setup: (agentCtx) => {
+    setup: async (agentCtx) => {
+      if (agentPreset !== undefined && agentPreset !== '') {
+        await agentPresets?.mount(agentCtx, agentPreset)
+      }
       const selected: ModelSelectionRef = { current: selection, assembled: undefined }
       installModelSelection(agentCtx, selected)
     },
@@ -120,7 +132,7 @@ async function run(ctx: Context, task: string, io: HeadlessIo): Promise<void> {
   await agent.whenIdle()
   const firstSeq = agent.session.seq
   agent.followup(createUserMessage({
-    content: [{ type: 'text', text: task }],
+    content: [{ type: 'text', text: config.task }],
     source: { kind: 'user' },
   }))
   await agent.whenIdle()
@@ -146,5 +158,5 @@ export function apply(ctx: Context, config: Config): void {
     throw new Error('headless-runner: the launcher must provide ctx.appExit before the tree mounts')
   }
   const io: HeadlessIo = { stdout: internals.stdout, stderr: internals.stderr, exit }
-  void run(ctx, config.task, io).catch((error: unknown) => { fail(io, error) })
+  void run(ctx, config, io).catch((error: unknown) => { fail(io, error) })
 }

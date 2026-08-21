@@ -219,7 +219,7 @@ describe('the shipped Web composition', () => {
   it('supplies both shipped presets, and only those, from the system root', async () => {
     const listed = await ctx.agentPresets.list()
 
-    expect(listed.map(preset => preset.id).sort()).toEqual(['code', 'cordis', 'minimal', 'standard'])
+    expect(listed.map(preset => preset.id).sort()).toEqual(['code', 'cordis', 'minimal', 'mobile', 'standard'])
     expect(listed.every(preset => preset.trust === 'system')).toBe(true)
     expect(ctx.agentPresets.defaultId).toBe('standard')
   })
@@ -264,6 +264,35 @@ describe('the shipped Web composition', () => {
       expect(handle.agent.ctx.get('compaction')).toBeUndefined()
     } finally {
       await handle.dispose()
+    }
+  })
+
+  it('composes the Android tool suite from `mobile` without changing the global layer', async () => {
+    const previousToken = process.env.DSH_ANDROID_BRIDGE_TOKEN
+    process.env.DSH_ANDROID_BRIDGE_TOKEN = 'test-mobile-token'
+    const handle = await ctx.agents.create({
+      sessionId: SessionId('preset-mobile'),
+      setup: agentCtx => ctx.agentPresets.mount(agentCtx, 'mobile').then(() => undefined),
+    })
+    try {
+      const scopedTools = toolNames(ctx, handle.agent)
+      expect(scopedTools).toEqual(expect.arrayContaining([
+        'app_open',
+        'input_swipe',
+        'input_tap',
+        'input_type',
+        'memory_forget',
+        'memory_search',
+        'memory_write',
+        'screen_observe',
+        'todo_write',
+        'user_confirm',
+      ]))
+      expect(toolNames(ctx)).toEqual([])
+    } finally {
+      await handle.dispose()
+      if (previousToken === undefined) delete process.env.DSH_ANDROID_BRIDGE_TOKEN
+      else process.env.DSH_ANDROID_BRIDGE_TOKEN = previousToken
     }
   })
 
