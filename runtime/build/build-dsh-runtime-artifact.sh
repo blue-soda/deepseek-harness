@@ -258,6 +258,7 @@ const skipNames = new Set([
   'fixtures',
 ]);
 const links = [];
+const brokenLinks = [];
 
 function isInsideRoot(file) {
   return file === root || file.startsWith(root + path.sep);
@@ -273,7 +274,8 @@ function walk(dir) {
       try {
         target = fs.realpathSync(file);
       } catch (error) {
-        throw new Error(`Broken runtime symlink: ${file} -> ${rawTarget} (${error.message})`);
+        brokenLinks.push({ link: file, target: rawTarget, error: error.message });
+        continue;
       }
       if (path.isAbsolute(rawTarget) || !isInsideRoot(target)) {
         links.push({ link: file, target });
@@ -309,6 +311,10 @@ function copyRecursive(source, destination) {
 
 walk(nodeModules);
 
+for (const { link } of brokenLinks) {
+  fs.rmSync(link, { force: true });
+}
+
 for (const { link, target } of links) {
   const temp = `${link}.materialized-${process.pid}`;
   fs.rmSync(temp, { recursive: true, force: true });
@@ -318,6 +324,7 @@ for (const { link, target } of links) {
 }
 
 console.log(`materialized_external_symlinks=${links.length}`);
+console.log(`removed_broken_runtime_symlinks=${brokenLinks.length}`);
 NODE
 }
 
