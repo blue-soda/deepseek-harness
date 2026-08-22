@@ -1,0 +1,77 @@
+name: Build DSH Runtime Artifact
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_platform:
+        description: "Target platform label"
+        required: true
+        default: "android-x64"
+      prune_profile:
+        description: "Prune profile under runtime/build/prune-rules"
+        required: true
+        default: "mobile-slim"
+      dsh_package:
+        description: "pnpm filter package to deploy"
+        required: true
+        default: "@deepseek-ai/dsh"
+      build_command:
+        description: "Build command run before deploy"
+        required: true
+        default: "pnpm run build"
+
+jobs:
+  build:
+    name: Build runtime
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout DSH
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+
+      - name: Enable pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@11.7.0 --activate
+          node --version
+          pnpm --version
+
+      - name: Locate pnpm store
+        id: pnpm-store
+        run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: dsh-runtime-pnpm-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'runtime/build/prune-rules/*.env') }}
+          restore-keys: |
+            dsh-runtime-pnpm-${{ runner.os }}-
+
+      - name: Build DSH runtime artifact
+        env:
+          DSH_REPO: ${{ github.server_url }}/${{ github.repository }}
+          DSH_REF: ${{ github.ref_name }}
+          TARGET_PLATFORM: ${{ inputs.target_platform }}
+          PRUNE_PROFILE: ${{ inputs.prune_profile }}
+          DSH_PACKAGE: ${{ inputs.dsh_package }}
+          DSH_BUILD_COMMAND: ${{ inputs.build_command }}
+          ARTIFACT_DIR: ${{ runner.temp }}/dsh-runtime-artifacts
+        run: |
+          bash runtime/build/build-dsh-runtime-artifact.sh --dsh-source-dir "$GITHUB_WORKSPACE"
+
+      - name: Upload DSH runtime artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dsh-runtime-${{ inputs.target_platform }}-${{ inputs.prune_profile }}
+          path: |
+            ${{ runner.temp }}/dsh-runtime-artifacts/*.tar.gz
+            ${{ runner.temp }}/dsh-runtime-artifacts/*.tar.gz.sha256
+            ${{ runner.temp }}/dsh-runtime-artifacts/*.manifest.json
+          if-no-files-found: error
