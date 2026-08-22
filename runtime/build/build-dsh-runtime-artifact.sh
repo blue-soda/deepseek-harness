@@ -232,6 +232,95 @@ repair_runtime_workspace_packages() {
   done
 }
 
+materialize_external_runtime_symlinks() {
+  [[ -d "$RUNTIME_DIR/node_modules" ]] || return 0
+
+  run_node - "$RUNTIME_DIR" <<'NODE'
+const fs = require('fs');
+const path = require('path');
+
+const rootArg = process.argv[2];
+const root = fs.realpathSync(process.platform === 'win32'
+  ? rootArg.replace(/^\/([a-zA-Z])\//, (_, drive) => `${drive}:/`)
+  : rootArg);
+const nodeModules = path.join(root, 'node_modules');
+const skipNames = new Set([
+  '.git',
+  'node_modules',
+  'src',
+  'test',
+  'tests',
+  '__tests__',
+  'docs',
+  'doc',
+  'examples',
+  'example',
+  'fixtures',
+]);
+const links = [];
+
+function isInsideRoot(file) {
+  return file === root || file.startsWith(root + path.sep);
+}
+
+function walk(dir) {
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const file = path.join(dir, entry.name);
+    const stat = fs.lstatSync(file);
+    if (stat.isSymbolicLink()) {
+      const rawTarget = fs.readlinkSync(file);
+      let target;
+      try {
+        target = fs.realpathSync(file);
+      } catch (error) {
+        throw new Error(`Broken runtime symlink: ${file} -> ${rawTarget} (${error.message})`);
+      }
+      if (path.isAbsolute(rawTarget) || !isInsideRoot(target)) {
+        links.push({ link: file, target });
+      }
+      continue;
+    }
+    if (stat.isDirectory()) {
+      walk(file);
+    }
+  }
+}
+
+function copyRecursive(source, destination) {
+  const stat = fs.lstatSync(source);
+  if (stat.isSymbolicLink()) {
+    copyRecursive(fs.realpathSync(source), destination);
+    return;
+  }
+  if (stat.isDirectory()) {
+    fs.mkdirSync(destination, { recursive: true });
+    for (const entry of fs.readdirSync(source, { withFileTypes: true })) {
+      if (skipNames.has(entry.name)) continue;
+      copyRecursive(path.join(source, entry.name), path.join(destination, entry.name));
+    }
+    return;
+  }
+  if (stat.isFile()) {
+    fs.mkdirSync(path.dirname(destination), { recursive: true });
+    fs.copyFileSync(source, destination);
+    fs.chmodSync(destination, stat.mode);
+  }
+}
+
+walk(nodeModules);
+
+for (const { link, target } of links) {
+  const temp = `${link}.materialized-${process.pid}`;
+  fs.rmSync(temp, { recursive: true, force: true });
+  copyRecursive(target, temp);
+  fs.rmSync(link, { recursive: true, force: true });
+  fs.renameSync(temp, link);
+}
+
+console.log(`materialized_external_symlinks=${links.length}`);
+NODE
+}
+
 check_dsh_version() {
   local stage="$1"
   local version_file="/tmp/dsh-runtime-version.$$"
@@ -340,6 +429,7 @@ bash "$SCRIPT_DIR/prune-dsh-runtime.sh" \
   --rules-file "$PRUNE_RULES_FILE" \
   --target-platform "$TARGET_PLATFORM"
 
+materialize_external_runtime_symlinks
 check_dsh_version "after pruning" || exit 4
 
 # Android app sandboxes may reject restoring hardlinks from tar archives. Expand
