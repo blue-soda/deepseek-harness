@@ -225,23 +225,6 @@ package_target_dir() {
   fi
 }
 
-relative_symlink_target() {
-  local target="$1"
-  local link_dir="$2"
-  run_node - "$target" "$link_dir" <<'NODE'
-const path = require('path');
-let target = process.argv[2];
-let linkDir = process.argv[3];
-if (process.platform === 'win32') {
-  target = target.replace(/^\/([a-zA-Z])\//, (_, drive) => `${drive}:/`);
-  linkDir = linkDir.replace(/^\/([a-zA-Z])\//, (_, drive) => `${drive}:/`);
-}
-let relative = path.relative(linkDir, target);
-if (!relative.startsWith('.')) relative = `.${path.sep}${relative}`;
-process.stdout.write(relative.split(path.sep).join('/'));
-NODE
-}
-
 copy_workspace_package_to_runtime_target() {
   local source_package_dir="$1"
   local target_package_dir="$2"
@@ -272,9 +255,8 @@ repair_runtime_workspace_packages() {
   [[ -n "$SOURCE_DIR" ]] || return 0
   [[ -n "$DSH_RUNTIME_REQUIRED_WORKSPACE_PACKAGES" ]] || return 0
 
-  local packages_file contexts_file
+  local packages_file
   packages_file="$WORK_ROOT/required-workspace-packages.tsv"
-  contexts_file="$WORK_ROOT/runtime-node-modules-contexts.txt"
   : > "$packages_file"
 
   local package_spec package_name source_package_dir root_target copied found
@@ -306,35 +288,171 @@ repair_runtime_workspace_packages() {
 
   sort -u "$packages_file" -o "$packages_file"
 
-  find "$RUNTIME_DIR/node_modules/.pnpm" -path '*/node_modules' -type d -print 2>/dev/null \
-    | sort -u > "$contexts_file" || true
-  printf '%s\n' "$RUNTIME_DIR/node_modules" >> "$contexts_file"
-  sort -u "$contexts_file" -o "$contexts_file"
+  run_node - "$RUNTIME_DIR" "$packages_file" <<'NODE'
+const fs = require('fs');
+const path = require('path');
 
-  local context_dir target link_dir link_target symlinked
-  symlinked=0
-  while IFS= read -r context_dir; do
-    [[ -n "$context_dir" ]] || continue
-    while IFS=$'\t' read -r package_name source_package_dir; do
-      [[ -n "$package_name" ]] || continue
-      target="$(package_target_dir "$context_dir" "$package_name")"
-      if [[ -e "$target" || -L "$target" ]]; then
-        continue
-      fi
-      root_target="$(package_target_dir "$RUNTIME_DIR/node_modules" "$package_name")"
-      if [[ ! -e "$root_target" ]]; then
-        echo "WARN: repaired workspace root target missing: $package_name -> $root_target" >&2
-        continue
-      fi
-      link_dir="$(dirname "$target")"
-      mkdir -p "$link_dir"
-      link_target="$(relative_symlink_target "$root_target" "$link_dir")"
-      ln -s "$link_target" "$target"
-      symlinked=$((symlinked + 1))
-    done < "$packages_file"
-  done < "$contexts_file"
+function toNodePath(file) {
+  if (process.platform !== 'win32') return file;
+  return file.replace(/^\/([a-zA-Z])\//, (_, drive) => `${drive}:/`);
+}
 
-  echo "repaired_workspace_context_symlinks=$symlinked"
+const runtimeDir = fs.realpathSync(toNodePath(process.argv[2]));
+const packagesFile = toNodePath(process.argv[3]);
+const rootNodeModules = path.join(runtimeDir, 'node_modules');
+const pnpmDir = path.join(rootNodeModules, '.pnpm');
+const workspaceNames = new Set();
+const rootTargets = new Map();
+let created = 0;
+
+function packageTargetDir(nodeModulesDir, packageName) {
+  if (packageName.startsWith('@')) {
+    const [scope, name] = packageName.split('/');
+    return path.join(nodeModulesDir, scope, name);
+  }
+  return path.join(nodeModulesDir, packageName);
+}
+
+for (const line of fs.readFileSync(packagesFile, 'utf8').split(/\r?\n/u)) {
+  if (!line.trim()) continue;
+  const [name] = line.split('\t');
+  if (!name) continue;
+  workspaceNames.add(name);
+  rootTargets.set(name, packageTargetDir(rootNodeModules, name));
+}
+
+function readPackageJson(packageDir) {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(packageDir, 'package.json'), 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+function dependencyNames(pkg) {
+  const names = new Set();
+  for (const field of ['dependencies', 'optionalDependencies', 'peerDependencies']) {
+    for (const name of Object.keys(pkg?.[field] ?? {})) {
+      names.add(name);
+    }
+  }
+  return names;
+}
+
+function relativeLinkTarget(target, linkDir) {
+  let relative = path.relative(linkDir, target);
+  if (!relative.startsWith('.')) relative = `.${path.sep}${relative}`;
+  return relative.split(path.sep).join('/');
+}
+
+function linkWorkspacePackage(contextDir, packageName) {
+  const target = packageTargetDir(contextDir, packageName);
+  try {
+    fs.lstatSync(target);
+    return false;
+  } catch (error) {
+    if (error?.code !== 'ENOENT') throw error;
+  }
+
+  const rootTarget = rootTargets.get(packageName);
+  if (!rootTarget || !fs.existsSync(rootTarget)) {
+    console.error(`WARN: repaired workspace root target missing: ${packageName} -> ${rootTarget}`);
+    return false;
+  }
+
+  const linkDir = path.dirname(target);
+  fs.mkdirSync(linkDir, { recursive: true });
+  fs.symlinkSync(relativeLinkTarget(rootTarget, linkDir), target);
+  created += 1;
+  return true;
+}
+
+function listContextPackageNames(contextDir) {
+  const names = new Set();
+  let entries;
+  try {
+    entries = fs.readdirSync(contextDir, { withFileTypes: true });
+  } catch {
+    return names;
+  }
+
+  for (const entry of entries) {
+    if (entry.name === '.bin' || entry.name === '.pnpm') continue;
+    const entryPath = path.join(contextDir, entry.name);
+    if (entry.name.startsWith('@')) {
+      let scoped;
+      try {
+        scoped = fs.readdirSync(entryPath, { withFileTypes: true });
+      } catch {
+        continue;
+      }
+      for (const child of scoped) {
+        names.add(`${entry.name}/${child.name}`);
+      }
+      continue;
+    }
+    names.add(entry.name);
+  }
+  return names;
+}
+
+function contextPackageDir(contextDir, packageName) {
+  const direct = packageTargetDir(contextDir, packageName);
+  if (fs.existsSync(direct)) return direct;
+  return rootTargets.get(packageName) ?? direct;
+}
+
+function repairContext(contextDir) {
+  const queue = [...listContextPackageNames(contextDir)];
+  const seen = new Set();
+
+  while (queue.length > 0) {
+    const packageName = queue.shift();
+    if (!packageName || seen.has(packageName)) continue;
+    seen.add(packageName);
+
+    const pkg = readPackageJson(contextPackageDir(contextDir, packageName));
+    if (!pkg) continue;
+
+    for (const depName of dependencyNames(pkg)) {
+      if (!workspaceNames.has(depName)) continue;
+      if (linkWorkspacePackage(contextDir, depName)) {
+        queue.push(depName);
+      } else if (!seen.has(depName)) {
+        queue.push(depName);
+      }
+    }
+  }
+}
+
+function collectNodeModulesContexts() {
+  const contexts = new Set([rootNodeModules]);
+  function walk(dir) {
+    let entries;
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const file = path.join(dir, entry.name);
+      if (!entry.isDirectory()) continue;
+      if (entry.name === 'node_modules') {
+        contexts.add(file);
+      }
+      walk(file);
+    }
+  }
+  if (fs.existsSync(pnpmDir)) walk(pnpmDir);
+  return [...contexts].sort();
+}
+
+for (const contextDir of collectNodeModulesContexts()) {
+  repairContext(contextDir);
+}
+
+console.log(`repaired_workspace_context_symlinks=${created}`);
+NODE
 }
 
 materialize_external_runtime_symlinks() {
