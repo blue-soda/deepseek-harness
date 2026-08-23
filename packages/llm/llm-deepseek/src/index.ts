@@ -134,6 +134,8 @@ export interface Config {
   imageOffloadCountQuantum?: number
   /** Maximum duration of one request-image Files API resolution (default one minute). */
   filesApiTimeoutMs?: number
+  /** Preferred image representation in chat requests (default Files API file references). */
+  imageRepresentation?: 'file' | 'base64'
   /** Explicit lifetime assigned to each uploaded image (default seven days). */
   fileExpiresAfterSeconds?: number
   /** Remaining lifetime below which an indexed file is replaced (default one hour). */
@@ -172,6 +174,7 @@ export const Config: z<Config> = z.object({
   inlineImageOffloadByteQuantum: z.number().step(1).min(1).default(DEFAULT_INLINE_IMAGE_OFFLOAD_BYTE_QUANTUM),
   imageOffloadCountQuantum: z.number().step(1).min(1).default(DEFAULT_IMAGE_OFFLOAD_COUNT_QUANTUM),
   filesApiTimeoutMs: z.number().min(Number.MIN_VALUE).max(MAX_TIMER_DELAY_MS).default(DEFAULT_FILES_API_TIMEOUT_MS),
+  imageRepresentation: z.union(['file', 'base64']).default('file'),
   fileExpiresAfterSeconds: z.number().step(1).min(3_600).max(2_592_000).default(DEFAULT_FILE_EXPIRY_SECONDS),
   fileRefreshMarginSeconds: z.number().step(1).min(0).default(DEFAULT_FILE_REFRESH_MARGIN_SECONDS),
   fileQuotaCleanupBatch: z.number().step(1).min(1).max(1_000).default(DEFAULT_FILE_QUOTA_CLEANUP_BATCH),
@@ -336,6 +339,10 @@ export function resolveAdapterOptions(config: Config, environment?: LaunchEnviro
       `llm-deepseek: filesApiTimeoutMs must be a positive finite number no greater than ${MAX_TIMER_DELAY_MS}`,
     )
   }
+  const imageRepresentation = config.imageRepresentation ?? 'file'
+  if (imageRepresentation !== 'file' && imageRepresentation !== 'base64') {
+    throw new Error('llm-deepseek: imageRepresentation must be either "file" or "base64"')
+  }
   const fileExpiresAfterSeconds = config.fileExpiresAfterSeconds ?? DEFAULT_FILE_EXPIRY_SECONDS
   if (!Number.isSafeInteger(fileExpiresAfterSeconds)
     || fileExpiresAfterSeconds < 3_600
@@ -374,6 +381,7 @@ export function resolveAdapterOptions(config: Config, environment?: LaunchEnviro
     inlineImageOffloadByteQuantum,
     imageOffloadCountQuantum,
     filesApiTimeoutMs,
+    imageRepresentation,
     filePolicy: {
       expiresAfterSeconds: fileExpiresAfterSeconds,
       refreshMarginSeconds: fileRefreshMarginSeconds,

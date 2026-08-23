@@ -101,6 +101,8 @@ export interface DeepSeekConnectionOptions {
   imageOffloadCountQuantum: number
   /** Maximum duration of one request-image Files API resolution. */
   filesApiTimeoutMs: number
+  /** Preferred representation for image input in chat requests. */
+  imageRepresentation: 'file' | 'base64'
   /** Upload expiry, refresh, and quota-recovery policy. */
   filePolicy: DeepSeekFilePolicy
   /** Provider-owned model-request retry policy, already resolved. */
@@ -258,6 +260,16 @@ function detailNamesFileId(detail: string, fileId: DeepSeekFileId): boolean {
     index = detail.indexOf(fileId, index + 1)
   }
   return false
+}
+
+function describeTransportCause(error: unknown): string {
+  if (error instanceof LlmError) {
+    return `${error.name}(${error.code}): ${error.message}`
+  }
+  if (error instanceof Error) {
+    return `${error.name}: ${error.message}`
+  }
+  return String(error)
 }
 
 function staleMappings(
@@ -495,7 +507,11 @@ export class DeepSeekAdapter extends LlmAdapter {
         throw new LlmError('DeepSeek request aborted by caller', 'ABORTED', { cause: error })
       }
       if (error instanceof LlmError) throw error
-      throw new LlmError(`DeepSeek API stream from ${connection.baseURL} failed`, 'TRANSPORT', { cause: error })
+      throw new LlmError(
+        `DeepSeek API stream from ${connection.baseURL} failed: ${describeTransportCause(error)}`,
+        'TRANSPORT',
+        { cause: error },
+      )
     } finally {
       consumer.abort('DeepSeek stream consumer stopped')
       if (!exhausted && iterator.return !== undefined) {
@@ -546,7 +562,7 @@ export class DeepSeekAdapter extends LlmAdapter {
     const requestImages = attachments === undefined || model === undefined
       ? new Map<AttachmentId, RequestImageAttachment>()
       : await prepareRequestImages(requestOptions, attachments, model, signal)
-    let representation: 'file' | 'base64' = 'file'
+    let representation: 'file' | 'base64' = connection.imageRepresentation
     let fileAttempt = 0
     while (true) {
       const usedFiles: UsedRequestFile[] = []

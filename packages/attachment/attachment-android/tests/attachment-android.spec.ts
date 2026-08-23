@@ -1,4 +1,5 @@
 import { Context } from '@deepseek-ai/cordis'
+import { AttachmentId } from '@deepseek-ai/dsh-attachment'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -95,5 +96,46 @@ describe('android attachment store', () => {
     expect(calls).toHaveLength(2)
     expect(calls[0]).toMatchObject({ tool: 'attachment.save_image', risk: 'reversible' })
     expect(calls[1]).toMatchObject({ tool: 'attachment.read_image', risk: 'read_only' })
+  })
+
+  it('asks the Android bridge for request-image variants within the route budget', async () => {
+    const calls: unknown[] = []
+    const ref = {
+      attachmentId: AttachmentId('sha256:999f1d1527ee7e79266f16add5430fff76b1225d742464a5b1ff1f02971bb8ee'),
+      mediaType: 'image/png' as const,
+      bytes: PNG.byteLength,
+      width: 1,
+      height: 1,
+      name: 'screen.png',
+    }
+    vi.stubGlobal('fetch', async (_url: URL, init: RequestInit) => {
+      const body = JSON.parse(String(init.body)) as { id: string; tool: string; arguments: Record<string, unknown> }
+      calls.push(body)
+      return Response.json({
+        id: body.id,
+        ok: true,
+        result: { image: ref, base64: Buffer.from(PNG).toString('base64') },
+        error: null,
+        durationMs: 1,
+      })
+    })
+
+    const store = new AndroidAttachmentStore(new Context(), {
+      bridgeBaseUrl: 'http://127.0.0.1:8765',
+      bridgeToken: 'token',
+    })
+    const request = await store.readImageRequest(ref, { maxPixels: 640_000, maxBytes: 1024 * 1024 })
+
+    expect(request).toMatchObject({ attachment: ref, mediaType: 'image/png', width: 1, height: 1, bytes: PNG.byteLength })
+    expect(calls).toHaveLength(1)
+    expect(calls[0]).toMatchObject({
+      tool: 'attachment.read_image',
+      risk: 'read_only',
+      arguments: {
+        attachmentId: ref.attachmentId,
+        maxPixels: 640_000,
+        maxBytes: 1024 * 1024,
+      },
+    })
   })
 })

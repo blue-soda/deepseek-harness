@@ -259,6 +259,31 @@ describe('DeepSeekAdapter against a mock server', () => {
     expect(files.ensureUploaded).toHaveBeenCalledTimes(1)
   })
 
+  it('uses inline base64 directly when configured', async () => {
+    const server = await mockServer([{ kind: 'sse', events: textEvents }])
+    const attachments = attachmentStoreOf(ref => Promise.resolve(requestImage(ref))).store
+    const files = fileStoreOf(() => Promise.resolve(fileReference('file-api-unused')))
+    const adapter = adapterOf({
+      baseURL: server.url,
+      imageRepresentation: 'base64',
+      models: [{ id: 'deepseek-v4-flash-vision-exp', inputModalities: ['text', 'image'] }],
+    }, attachments, files.store)
+
+    await drain(adapter.stream({
+      provider: 'deepseek-official',
+      model: 'deepseek-v4-flash-vision-exp',
+      messages: [createUserMessage({
+        content: [{ type: 'image', attachment: imageRef }],
+        source: { kind: 'plugin', plugin: 'test' },
+      })],
+    }))
+
+    const body = JSON.stringify(server.requests[0])
+    expect(body).toContain('"type":"image_url"')
+    expect(body).not.toContain('file_id')
+    expect(files.ensureUploaded).not.toHaveBeenCalled()
+  })
+
   it('reduces base64 fallback history from the configured high watermark to its half-size quantum', async () => {
     const server = await mockServer([{ kind: 'sse', events: textEvents }])
     const attachments = attachmentStoreOf(ref => Promise.resolve(requestImage(ref))).store
@@ -1314,7 +1339,9 @@ describe('DeepSeekAdapter against a mock server', () => {
     expect(result.finish.kind).toBe('error')
     if (result.finish.kind !== 'error') throw new Error('expected an error finish')
     expect(result.finish.failure.code).toBe('TRANSPORT')
-    expect(result.finish.failure.message).toMatch(/^DeepSeek API stream from .* failed$/)
+    expect(result.finish.failure.message).toMatch(
+      /^DeepSeek API stream from .* failed: (?:LlmError\(STREAM_CLOSED\): SSE stream ended without \[DONE\]|TypeError: terminated)$/,
+    )
   })
 
   it('aborts mid-stream via the request signal', async () => {
@@ -1832,6 +1859,13 @@ describe('plugin registration and config', () => {
       maxImagesPerRequest: 10,
       imageOffloadCountQuantum: 11,
     })).toThrow(/imageOffloadCountQuantum must not exceed maxImagesPerRequest/)
+  })
+
+  it('resolves and validates image representation', () => {
+    expect(resolveAdapterOptions({}).imageRepresentation).toBe('file')
+    expect(resolveAdapterOptions({ imageRepresentation: 'base64' }).imageRepresentation).toBe('base64')
+    expect(() => resolveAdapterOptions({ imageRepresentation: 'inline' as 'base64' }))
+      .toThrow(/imageRepresentation must be either "file" or "base64"/)
   })
 
   it.each([

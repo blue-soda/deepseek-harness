@@ -122,6 +122,7 @@ export class AndroidAttachmentStore extends AttachmentStore {
     signal?: AbortSignal,
   ): Promise<RequestImageAttachment> {
     validatePolicy(policy)
+    if (this.bridge !== undefined) return this.bridge.readImageRequest(ref, policy, signal)
     const stored = await this.readImage(ref, signal)
     if (stored.data.byteLength > policy.maxBytes || ref.width * ref.height > policy.maxPixels) {
       throw new AttachmentError(
@@ -222,6 +223,54 @@ class AndroidAttachmentBridge {
       throw new AttachmentError('Android bridge returned attachment metadata that does not match its reference.', 'ATTACHMENT_CORRUPT')
     }
     return { ref: image, data }
+  }
+
+  async readImageRequest(
+    ref: ImageAttachmentRef,
+    policy: ImageRequestPolicy,
+    signal?: AbortSignal,
+  ): Promise<RequestImageAttachment> {
+    const result = await this.execute('attachment.read_image', 'read_only', {
+      attachmentId: ref.attachmentId,
+      mediaType: ref.mediaType,
+      bytes: ref.bytes,
+      width: ref.width,
+      height: ref.height,
+      maxPixels: policy.maxPixels,
+      maxBytes: policy.maxBytes,
+      ...ref.name === undefined ? {} : { name: ref.name },
+    }, signal, 'ATTACHMENT_READ_FAILED')
+    const record = objectRecord(result, 'attachment.read_image.result')
+    const image = parseImageRef(record.image, 'attachment.read_image.result.image')
+    const data = new Uint8Array(Buffer.from(stringField(record.base64, 'attachment.read_image.result.base64'), 'base64'))
+    if (data.byteLength !== image.bytes) {
+      throw new AttachmentError('Android bridge returned request-image bytes that do not match metadata.', 'ATTACHMENT_CORRUPT')
+    }
+    const metadata = detectImage(data)
+    if (metadata.mediaType !== image.mediaType || metadata.width !== image.width || metadata.height !== image.height) {
+      throw new AttachmentError('Android bridge returned request-image metadata that does not match bytes.', 'ATTACHMENT_CORRUPT')
+    }
+    if (image.width * image.height > policy.maxPixels || image.bytes > policy.maxBytes) {
+      throw new AttachmentError('Android bridge returned a request image outside the model route budget.', 'IMAGE_TOO_LARGE')
+    }
+    const variantId = ImageVariantId(`sha256:${digest(JSON.stringify({
+      androidAttachment: ref.attachmentId,
+      requestAttachment: image.attachmentId,
+      maxPixels: policy.maxPixels,
+      maxBytes: policy.maxBytes,
+    }))}`)
+    return {
+      variantId,
+      attachment: ref,
+      data,
+      mediaType: image.mediaType,
+      bytes: image.bytes,
+      width: image.width,
+      height: image.height,
+      depth: 'uchar',
+      space: 'srgb',
+      hasAlpha: image.mediaType === 'image/png',
+    }
   }
 
   private async execute(
