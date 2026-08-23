@@ -10,7 +10,11 @@ on:
       prune_profile:
         description: "Prune profile under runtime/build/prune-rules"
         required: true
-        default: "mobile-slim"
+        type: choice
+        options:
+          - android-host-slim
+          - full
+        default: "android-host-slim"
       dsh_package:
         description: "pnpm filter package to deploy"
         required: true

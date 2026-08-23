@@ -17,7 +17,7 @@ EOF
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RUNTIME_DIR="${RUNTIME_DIR:-}"
-RULES_FILE="${PRUNE_RULES_FILE:-$SCRIPT_DIR/prune-rules/mobile-slim.env}"
+RULES_FILE="${PRUNE_RULES_FILE:-$SCRIPT_DIR/prune-rules/android-host-slim.env}"
 TARGET_PLATFORM="${TARGET_PLATFORM:-android-x64}"
 
 while [[ $# -gt 0 ]]; do

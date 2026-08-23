@@ -1,0 +1,85 @@
+name: Build Android Node Runtime Artifact
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_platform:
+        description: "Target platform label"
+        required: true
+        type: choice
+        options:
+          - android-x64
+          - android-arm64
+        default: "android-x64"
+      termux_repo_url:
+        description: "Termux apt repository base URL"
+        required: true
+        default: "https://packages.termux.dev/apt/termux-main/"
+      termux_suite:
+        description: "Termux apt suite"
+        required: true
+        default: "stable"
+      termux_component:
+        description: "Termux apt component"
+        required: true
+        default: "main"
+      node_package:
+        description: "Termux Node package"
+        required: true
+        default: "nodejs-lts"
+      node_package_version:
+        description: "Optional exact Termux Node package version, e.g. 24.18.0-1"
+        required: false
+        default: ""
+      extra_packages:
+        description: "Space-separated extra Termux command packages"
+        required: false
+        default: "curl wget"
+      tool_binary_globs:
+        description: "Space-separated command binary globs retained from extra packages"
+        required: false
+        default: "usr/bin/curl usr/bin/wget"
+
+jobs:
+  build:
+    name: Build ${{ inputs.target_platform }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout DSH
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install ELF tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends binutils
+
+      - name: Build Android Node runtime artifact
+        env:
+          TARGET_PLATFORM: ${{ inputs.target_platform }}
+          TERMUX_REPO_URL: ${{ inputs.termux_repo_url }}
+          TERMUX_SUITE: ${{ inputs.termux_suite }}
+          TERMUX_COMPONENT: ${{ inputs.termux_component }}
+          TERMUX_NODE_PACKAGE: ${{ inputs.node_package }}
+          TERMUX_NODE_PACKAGE_VERSION: ${{ inputs.node_package_version }}
+          NODE_RUNTIME_EXTRA_PACKAGES: ${{ inputs.extra_packages }}
+          NODE_RUNTIME_TOOL_BINARY_GLOBS: ${{ inputs.tool_binary_globs }}
+          ARTIFACT_DIR: ${{ runner.temp }}/node-runtime-artifacts
+        run: |
+          python runtime/node/build-android-node-runtime.py
+
+      - name: Upload Android Node runtime artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: node-runtime-${{ inputs.target_platform }}
+          path: |
+            ${{ runner.temp }}/node-runtime-artifacts/*.tar.gz
+            ${{ runner.temp }}/node-runtime-artifacts/*.tar.gz.sha256
+            ${{ runner.temp }}/node-runtime-artifacts/*.manifest.json
+          if-no-files-found: error
