@@ -9,6 +9,7 @@ import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import * as toolMobile from '@deepseek-ai/dsh-tool-mobile'
 import {
+  parseAndroidShArgs,
   parseAppOpenArgs,
   parseAppOpenUrlArgs,
   parseConfirmArgs,
@@ -111,9 +112,12 @@ describe('dsh-tool-mobile parser helpers', () => {
       sourceTaskId: 'task-1',
     })
     expect(parseMemoryForgetArgs({ id: 'memory-1' })).toEqual({ id: 'memory-1' })
+    expect(parseAndroidShArgs({ command: 'pwd', mode: 'safe', cwd: 'tmp', timeoutMs: 1000 }))
+      .toEqual({ command: 'pwd', mode: 'safe', cwd: 'tmp', timeoutMs: 1000 })
     expect(() => parseMemorySearchArgs({ query: 'browser', limit: 0 })).toThrow(/positive integer/)
     expect(() => parseMemoryWriteArgs({ text: 'x', kind: 'secret' })).toThrow(/kind must be one of/)
     expect(() => parseMemoryWriteArgs({ text: 'x', metadata: { topic: 1 } })).toThrow(/metadata.topic/)
+    expect(() => parseAndroidShArgs({ command: 'pwd', mode: 'root' })).toThrow(/mode must be one of/)
   })
 })
 
@@ -121,6 +125,7 @@ describe('dsh-tool-mobile', () => {
   it('registers the expected Android tool schemas', async () => {
     const { ctx } = await setup()
     expect(ctx.tools.schemas().map(schema => schema.name).filter(name => name.includes('_')).sort()).toEqual([
+      'android_sh',
       'app_close',
       'app_open',
       'app_open_url',
@@ -131,6 +136,7 @@ describe('dsh-tool-mobile', () => {
       'memory_search',
       'memory_write',
       'screen_observe',
+      'screen_screenshot',
       'user_confirm',
     ])
     expect(ctx.tools.get('mobile_visual_step')).toBeUndefined()

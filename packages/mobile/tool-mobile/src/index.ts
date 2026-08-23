@@ -8,7 +8,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
-import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
+import type { ImageAttachmentRef, ImageMediaType } from '@deepseek-ai/dsh-attachment'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { ToolRunContext } from '@deepseek-ai/dsh-tools'
@@ -39,6 +39,10 @@ export interface Config {
   readonly openUrl?: boolean
   /** Register Android app close/background action. */
   readonly closeApp?: boolean
+  /** Register direct Android screenshot capture. */
+  readonly screenshot?: boolean
+  /** Register Android /system/bin/sh execution through the bridge. */
+  readonly androidSh?: boolean
   /** adb executable path used for `screen_observe` screenshot capture. */
   readonly observeScreenshotAdbPath?: string
   /** Optional adb device serial for `screen_observe` screenshot capture. */
@@ -87,6 +91,8 @@ export const Config: z<Config> = z.object({
   openApp: z.boolean().default(true),
   openUrl: z.boolean().default(true),
   closeApp: z.boolean().default(true),
+  screenshot: z.boolean().default(true),
+  androidSh: z.boolean().default(true),
   observeScreenshotAdbPath: z.string().default('adb'),
   observeScreenshotAdbSerial: z.string(),
   observeScreenshotReportsDir: z.string(),
@@ -235,6 +241,8 @@ export function apply(ctx: Context, config: Config): void {
   if (resolved.openApp) registerAppOpen(ctx, resolved.timeoutMs)
   if (resolved.openUrl) registerAppOpenUrl(ctx, resolved.timeoutMs)
   if (resolved.closeApp) registerAppClose(ctx, resolved.timeoutMs)
+  if (resolved.screenshot) registerScreenScreenshot(ctx, resolved.timeoutMs)
+  if (resolved.androidSh) registerAndroidSh(ctx, resolved.timeoutMs)
   if (resolved.visualStep) registerMobileVisualStep(ctx, resolved)
   if (resolved.confirm) registerUserConfirm(ctx, resolved.timeoutMs)
   if (resolved.memorySearch) registerMemorySearch(ctx, resolved.timeoutMs)
@@ -449,6 +457,60 @@ function registerAppClose(ctx: Context, timeoutMs: number): void {
       }, exec)
     },
     presentCall: () => ({ card: 'generic', title: 'Close Android app', kind: 'other', rawInput: {} }),
+  }))
+}
+
+function registerScreenScreenshot(ctx: Context, timeoutMs: number): void {
+  ctx.tools.register(defineTool({
+    name: 'screen_screenshot',
+    description: 'Capture the current Android screen through the DeepDroidPilot bridge and return it as a durable image attachment when attachments are available.',
+    parameters: {},
+    output: {
+      schema: OUTPUT_SCHEMA,
+      render: (_args, value) => renderScreenObserveOutput(value),
+    },
+    timeoutMs,
+    isConcurrencySafe: () => true,
+    async execute(_args, exec) {
+      const output = await executeAndroidTool(ctx, {
+        id: String(exec.callId),
+        tool: 'screen.screenshot',
+        risk: 'read_only',
+        arguments: {},
+        ...exec.agent !== undefined ? { sessionId: exec.agent.session.id } : {},
+      }, exec)
+      return attachBridgeScreenshot(ctx, output)
+    },
+    presentCall: () => ({ card: 'generic', title: 'Capture Android screen', kind: 'read', rawInput: {} }),
+  }))
+}
+
+function registerAndroidSh(ctx: Context, timeoutMs: number): void {
+  ctx.tools.register(defineTool({
+    name: 'android_sh',
+    description: 'Run a bounded Android /system/bin/sh command in the DroidPilot workspace through the Android bridge. Use mode="safe" for ordinary read-only diagnostics, mode="approval" when a command needs explicit user approval, and mode="max" only when the user has asked for the highest app-UID permissions Android can grant.',
+    parameters: {
+      command: { type: 'string', required: true, description: 'Shell command passed to /system/bin/sh -c.' },
+      cwd: { type: 'string', description: 'Relative working directory under the DroidPilot workspace.' },
+      mode: { type: 'string', description: 'One of safe, approval, or max. Defaults to safe.' },
+      timeoutMs: { type: 'integer', description: 'Command timeout in milliseconds.' },
+      maxOutputBytes: { type: 'integer', description: 'Maximum bytes captured separately from stdout and stderr.' },
+    },
+    output: {
+      schema: OUTPUT_SCHEMA,
+      render: (_args, value) => [{ type: 'text', text: renderMobileOutput('shell.exec', value) }],
+    },
+    timeoutMs,
+    execute(args, exec) {
+      return executeAndroidTool(ctx, {
+        id: String(exec.callId),
+        tool: 'shell.exec',
+        risk: 'sensitive',
+        arguments: parseAndroidShArgs(args),
+        ...exec.agent !== undefined ? { sessionId: exec.agent.session.id } : {},
+      }, exec)
+    },
+    presentCall: args => ({ card: 'generic', title: 'Run Android shell', kind: 'other', rawInput: args }),
   }))
 }
 
@@ -673,37 +735,73 @@ async function executeAndroidTool(
 
 async function attachObserveScreenshot(
   ctx: Context,
-  config: ResolvedConfig,
+  _config: ResolvedConfig,
   output: MobileToolOutput,
-  _exec: ToolRunContext,
+  exec: ToolRunContext,
 ): Promise<MobileToolOutput> {
-  let capture: ScreenshotCapture | undefined
   try {
-    capture = captureAdbScreenshot(resolveObserveScreenshotConfig(config), 'mobile-observe')
+    const screenshot = await executeAndroidTool(ctx, {
+      id: `${String(exec.callId)}:screenshot`,
+      tool: 'screen.screenshot',
+      risk: 'read_only',
+      arguments: {},
+      ...exec.agent !== undefined ? { sessionId: exec.agent.session.id } : {},
+    }, exec)
+    return attachBridgeScreenshot(ctx, { ...output, screenshotPath: 'android-bridge:screen.screenshot' }, screenshot)
+  } catch (error) {
+    return {
+      ...output,
+      screenshotError: errorToAndroidToolError(error).message,
+    }
+  }
+}
+
+async function attachBridgeScreenshot(
+  ctx: Context,
+  output: MobileToolOutput,
+  screenshotOutput = output,
+): Promise<MobileToolOutput> {
+  try {
+    const screenshot = parseScreenshotResult(screenshotOutput.resultJson)
     const attachments = ctx.get('attachments')
     if (attachments === undefined) {
       return {
         ...output,
-        screenshotPath: capture.screenshotPath,
+        screenshotPath: output.screenshotPath ?? 'android-bridge:screen.screenshot',
         screenshotError: 'ctx.attachments is not mounted; cannot attach screenshot image',
       }
     }
     const attachment = await attachments.saveImage({
-      data: Uint8Array.from(capture.data),
-      mediaType: 'image/png',
+      data: screenshot.data,
+      mediaType: screenshot.mediaType,
       name: 'android-screen.png',
     })
     return {
       ...output,
-      screenshotPath: capture.screenshotPath,
+      screenshotPath: output.screenshotPath ?? 'android-bridge:screen.screenshot',
       screenshotAttachment: attachment,
     }
   } catch (error) {
     return {
       ...output,
-      ...capture === undefined ? {} : { screenshotPath: capture.screenshotPath },
+      screenshotPath: output.screenshotPath ?? 'android-bridge:screen.screenshot',
       screenshotError: errorToAndroidToolError(error).message,
     }
+  }
+}
+
+function parseScreenshotResult(resultJson: string): BridgeScreenshotCapture {
+  const value = JSON.parse(resultJson) as unknown
+  const record = objectArgs(value)
+  const mediaType = requiredString(record, 'mediaType')
+  if (!SCREENSHOT_MEDIA_TYPES.has(mediaType)) {
+    throw new Error('screen.screenshot returned an unsupported mediaType')
+  }
+  return {
+    data: Uint8Array.from(Buffer.from(requiredString(record, 'base64'), 'base64')),
+    mediaType: mediaType as ImageMediaType,
+    width: requiredInteger(record, 'width'),
+    height: requiredInteger(record, 'height'),
   }
 }
 
@@ -951,6 +1049,29 @@ export function parseMemoryForgetArgs(args: unknown): Record<string, unknown> {
   return { id: requiredString(objectArgs(args), 'id') }
 }
 
+/**
+ * Validate `android_sh` arguments.
+ * @param args - Model-supplied tool arguments.
+ * @returns Android bridge arguments for `shell.exec`.
+ */
+export function parseAndroidShArgs(args: unknown): Record<string, unknown> {
+  const value = objectArgs(args)
+  const mode = optionalString(value, 'mode')
+  if (mode !== undefined && !ANDROID_SH_MODES.has(mode)) {
+    throw new Error(`mode must be one of ${Array.from(ANDROID_SH_MODES).join(', ')}`)
+  }
+  const cwd = optionalString(value, 'cwd')
+  const timeoutMs = optionalInteger(value, 'timeoutMs')
+  const maxOutputBytes = optionalInteger(value, 'maxOutputBytes')
+  return {
+    command: requiredString(value, 'command'),
+    ...cwd !== undefined ? { cwd } : {},
+    ...mode !== undefined ? { mode } : {},
+    ...timeoutMs !== undefined ? { timeoutMs } : {},
+    ...maxOutputBytes !== undefined ? { maxOutputBytes } : {},
+  }
+}
+
 type VisualActionName = 'open_app' | 'open_url' | 'tap' | 'swipe' | 'type' | 'wait' | 'done'
 
 interface VisualAction extends Record<string, unknown> {
@@ -980,6 +1101,13 @@ interface ScreenshotCaptureConfig {
 interface ScreenshotCapture {
   readonly screenshotPath: string
   readonly data: Buffer
+}
+
+interface BridgeScreenshotCapture {
+  readonly data: Uint8Array
+  readonly mediaType: ImageMediaType
+  readonly width: number
+  readonly height: number
 }
 
 interface VisionActionRequest {
@@ -1013,18 +1141,6 @@ function resolveVisionConfig(config: ResolvedConfig): VisionConfig {
     reportsDir,
     screenWidth: positiveInteger(config.visionScreenWidth, 'visionScreenWidth'),
     screenHeight: positiveInteger(config.visionScreenHeight, 'visionScreenHeight'),
-  }
-}
-
-function resolveObserveScreenshotConfig(config: ResolvedConfig): ScreenshotCaptureConfig {
-  const reportsDir = stringOrUndefined(config.observeScreenshotReportsDir)
-    ?? process.env['DSH_MOBILE_OBSERVE_SCREENSHOT_REPORT_DIR']
-    ?? resolve(process.cwd(), 'reports', 'mobile-observe')
-  const adbSerial = stringOrUndefined(config.observeScreenshotAdbSerial) ?? process.env['ANDROID_SERIAL']
-  return {
-    adbPath: config.observeScreenshotAdbPath,
-    ...adbSerial === undefined ? {} : { adbSerial },
-    reportsDir,
   }
 }
 
@@ -1391,3 +1507,5 @@ function optionalStringMap(value: Record<string, unknown>, key: string): Record<
 
 const MEMORY_KINDS = new Set(['preference', 'task_trajectory', 'knowledge'])
 const VISUAL_ACTIONS = new Set<string>(['open_app', 'open_url', 'tap', 'swipe', 'type', 'wait', 'done'])
+const ANDROID_SH_MODES = new Set(['safe', 'approval', 'max'])
+const SCREENSHOT_MEDIA_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp'])
