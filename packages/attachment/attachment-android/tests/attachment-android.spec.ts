@@ -63,7 +63,7 @@ describe('android attachment store', () => {
     const calls: unknown[] = []
     let savedRef: Record<string, unknown> | undefined
     vi.stubGlobal('fetch', async (_url: URL, init: RequestInit) => {
-      const body = JSON.parse(String(init.body)) as { tool: string; arguments: Record<string, unknown> }
+      const body = JSON.parse(String(init.body)) as { id: string; tool: string; arguments: Record<string, unknown> }
       calls.push(body)
       if (body.tool === 'attachment.save_image') {
         savedRef = {
