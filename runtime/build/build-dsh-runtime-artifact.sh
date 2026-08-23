@@ -225,6 +225,34 @@ package_target_dir() {
   fi
 }
 
+relative_symlink_target() {
+  local target="$1"
+  local link_dir="$2"
+  run_node - "$target" "$link_dir" <<'NODE'
+const path = require('path');
+let target = process.argv[2];
+let linkDir = process.argv[3];
+if (process.platform === 'win32') {
+  target = target.replace(/^\/([a-zA-Z])\//, (_, drive) => `${drive}:/`);
+  linkDir = linkDir.replace(/^\/([a-zA-Z])\//, (_, drive) => `${drive}:/`);
+}
+let relative = path.relative(linkDir, target);
+if (!relative.startsWith('.')) relative = `.${path.sep}${relative}`;
+process.stdout.write(relative.split(path.sep).join('/'));
+NODE
+}
+
+find_runtime_package_instance() {
+  local package_name="$1"
+  local package_path
+  if [[ "$package_name" == @*/* ]]; then
+    package_path="${package_name%%/*}/${package_name#*/}"
+  else
+    package_path="$package_name"
+  fi
+  find "$RUNTIME_DIR/node_modules/.pnpm" -path "*/node_modules/$package_path" -type d -print -quit 2>/dev/null || true
+}
+
 copy_workspace_package_to_runtime_target() {
   local source_package_dir="$1"
   local target_package_dir="$2"
@@ -259,7 +287,7 @@ repair_runtime_workspace_packages() {
   packages_file="$WORK_ROOT/required-workspace-packages.tsv"
   : > "$packages_file"
 
-  local package_spec package_name source_package_dir root_target copied found
+  local package_spec package_name source_package_dir root_target deployed_target link_target copied found
   for package_spec in $DSH_RUNTIME_REQUIRED_WORKSPACE_PACKAGES; do
     found=0
     while IFS=$'\t' read -r package_name source_package_dir; do
@@ -271,7 +299,13 @@ repair_runtime_workspace_packages() {
       root_target="$(package_target_dir "$RUNTIME_DIR/node_modules" "$package_name")"
       if [[ ! -e "$root_target" ]]; then
         mkdir -p "$(dirname "$root_target")"
-        copy_workspace_package_to_runtime_target "$source_package_dir" "$root_target"
+        deployed_target="$(find_runtime_package_instance "$package_name")"
+        if [[ -n "$deployed_target" ]]; then
+          link_target="$(relative_symlink_target "$deployed_target" "$(dirname "$root_target")")"
+          ln -s "$link_target" "$root_target"
+        else
+          copy_workspace_package_to_runtime_target "$source_package_dir" "$root_target"
+        fi
         copied=$((copied + 1))
       fi
 
