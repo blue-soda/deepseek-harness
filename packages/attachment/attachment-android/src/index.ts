@@ -1,5 +1,6 @@
 /** Android embedded attachment backend without sharp/libvips. @module @deepseek-ai/dsh-attachment-android */
 
+import { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
@@ -23,6 +24,9 @@ export interface Config {
   maxMessageImageBytes?: number
   maxImagePixels?: number
   maxImageDimension?: number
+  bridgeBaseUrl?: string
+  bridgeToken?: string
+  bridgeTimeoutMs?: number
 }
 
 const DEFAULT_MAX_IMAGE_BYTES = 20 * 1024 * 1024
@@ -41,6 +45,7 @@ interface ImageMetadata {
 export class AndroidAttachmentStore extends AttachmentStore {
   readonly root: string
   readonly imageLimits: ImageAttachmentLimits
+  private readonly bridge: AndroidAttachmentBridge | undefined
 
   constructor(ctx: Context, config: Config = {}) {
     super(ctx)
@@ -53,6 +58,15 @@ export class AndroidAttachmentStore extends AttachmentStore {
       maxImageDimension: config.maxImageDimension ?? DEFAULT_MAX_IMAGE_DIMENSION,
       mediaTypes: Object.freeze(['image/png', 'image/jpeg', 'image/webp'] as const),
     })
+    const bridgeBaseUrl = config.bridgeBaseUrl ?? process.env.DSH_ANDROID_BRIDGE_URL
+    const bridgeToken = config.bridgeToken ?? process.env.DSH_ANDROID_BRIDGE_TOKEN
+    this.bridge = bridgeBaseUrl !== undefined && bridgeToken !== undefined && bridgeToken.length > 0
+      ? new AndroidAttachmentBridge({
+        baseUrl: bridgeBaseUrl,
+        token: bridgeToken,
+        timeoutMs: config.bridgeTimeoutMs ?? 30_000,
+      })
+      : undefined
   }
 
   async validateImage(input: SaveImageAttachment): Promise<void> {
@@ -71,6 +85,7 @@ export class AndroidAttachmentStore extends AttachmentStore {
       height: metadata.height,
       ...name === undefined ? {} : { name },
     }
+    if (this.bridge !== undefined) return this.bridge.saveImage(input, ref)
     const path = objectPath(this.root, sha256)
     await mkdir(dirname(path), { recursive: true, mode: 0o700 })
     await writeFile(path, input.data, { mode: 0o600, flag: 'wx' }).catch(async (error: unknown) => {
@@ -82,6 +97,7 @@ export class AndroidAttachmentStore extends AttachmentStore {
 
   async readImage(ref: ImageAttachmentRef, signal?: AbortSignal): Promise<StoredImageAttachment> {
     signal?.throwIfAborted()
+    if (this.bridge !== undefined) return this.bridge.readImage(ref, signal)
     const sha256 = referenceDigest(ref)
     const data = new Uint8Array(await readFile(objectPath(this.root, sha256), { signal }))
     signal?.throwIfAborted()
@@ -160,6 +176,99 @@ export class AndroidAttachmentStore extends AttachmentStore {
 
 export default AndroidAttachmentStore
 
+interface AndroidAttachmentBridgeOptions {
+  readonly baseUrl: string
+  readonly token: string
+  readonly timeoutMs: number
+}
+
+class AndroidAttachmentBridge {
+  constructor(private readonly options: AndroidAttachmentBridgeOptions) {}
+
+  async saveImage(input: SaveImageAttachment, ref: ImageAttachmentRef): Promise<ImageAttachmentRef> {
+    const result = await this.execute('attachment.save_image', 'reversible', {
+      base64: Buffer.from(input.data).toString('base64'),
+      mediaType: ref.mediaType,
+      bytes: ref.bytes,
+      width: ref.width,
+      height: ref.height,
+      ...ref.name === undefined ? {} : { name: ref.name },
+    }, undefined, 'ATTACHMENT_WRITE_FAILED')
+    return parseImageRef(result, 'attachment.save_image.result')
+  }
+
+  async readImage(ref: ImageAttachmentRef, signal?: AbortSignal): Promise<StoredImageAttachment> {
+    const result = await this.execute('attachment.read_image', 'read_only', {
+      attachmentId: ref.attachmentId,
+      mediaType: ref.mediaType,
+      bytes: ref.bytes,
+      width: ref.width,
+      height: ref.height,
+      ...ref.name === undefined ? {} : { name: ref.name },
+    }, signal, 'ATTACHMENT_READ_FAILED')
+    const record = objectRecord(result, 'attachment.read_image.result')
+    const image = parseImageRef(record.image, 'attachment.read_image.result.image')
+    const data = new Uint8Array(Buffer.from(stringField(record.base64, 'attachment.read_image.result.base64'), 'base64'))
+    if (digest(data) !== referenceDigest(ref)) {
+      throw new AttachmentError('Android bridge returned corrupt attachment bytes.', 'ATTACHMENT_CORRUPT')
+    }
+    if (
+      image.attachmentId !== ref.attachmentId ||
+      image.mediaType !== ref.mediaType ||
+      image.bytes !== ref.bytes ||
+      image.width !== ref.width ||
+      image.height !== ref.height
+    ) {
+      throw new AttachmentError('Android bridge returned attachment metadata that does not match its reference.', 'ATTACHMENT_CORRUPT')
+    }
+    return { ref: image, data }
+  }
+
+  private async execute(
+    tool: string,
+    risk: 'read_only' | 'reversible',
+    args: Record<string, unknown>,
+    signal: AbortSignal | undefined,
+    failureCode: 'ATTACHMENT_READ_FAILED' | 'ATTACHMENT_WRITE_FAILED',
+  ): Promise<unknown> {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(new Error('Android attachment bridge request timed out')), this.options.timeoutMs)
+    const abortFromCaller = (): void => controller.abort(signal?.reason)
+    if (signal !== undefined) {
+      if (signal.aborted) controller.abort(signal.reason)
+      else signal.addEventListener('abort', abortFromCaller, { once: true })
+    }
+    try {
+      const response = await fetch(new URL('/execute', this.options.baseUrl), {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${this.options.token}`,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          id: `attachment-android:${tool}:${Date.now()}`,
+          tool,
+          risk,
+          arguments: args,
+        }),
+        signal: controller.signal,
+      })
+      const payload: unknown = await response.json()
+      const record = objectRecord(payload, `${tool} bridge response`)
+      if (!response.ok || record.ok !== true) {
+        throw new Error(bridgeErrorMessage(record))
+      }
+      return record.result
+    } catch (error: unknown) {
+      if (signal?.aborted === true) throw signal.reason
+      throw new AttachmentError(`Android attachment bridge ${tool} failed: ${errorMessage(error)}`, failureCode, { cause: error })
+    } finally {
+      clearTimeout(timeout)
+      if (signal !== undefined) signal.removeEventListener('abort', abortFromCaller)
+    }
+  }
+}
+
 function digest(data: Uint8Array | string): string {
   return createHash('sha256').update(data).digest('hex')
 }
@@ -179,6 +288,19 @@ function displayName(value: string | undefined): string | undefined {
   const leaf = value.slice(Math.max(value.lastIndexOf('/'), value.lastIndexOf('\\')) + 1)
   const clean = leaf.replace(/[\u0000-\u001f\u007f]/gu, '').trim().slice(0, 255)
   return clean === '' ? undefined : clean
+}
+
+function parseImageRef(value: unknown, path: string): ImageAttachmentRef {
+  const record = objectRecord(value, path)
+  const name = record.name === undefined ? undefined : displayName(stringField(record.name, `${path}.name`))
+  return {
+    attachmentId: AttachmentId(stringField(record.attachmentId, `${path}.attachmentId`)),
+    mediaType: imageMediaTypeField(record.mediaType, `${path}.mediaType`),
+    bytes: positiveIntegerField(record.bytes, `${path}.bytes`),
+    width: positiveIntegerField(record.width, `${path}.width`),
+    height: positiveIntegerField(record.height, `${path}.height`),
+    ...name === undefined ? {} : { name },
+  }
 }
 
 function validatePolicy(policy: ImageRequestPolicy): void {
@@ -294,4 +416,43 @@ function byteAt(data: Uint8Array, offset: number): number {
 
 function text(data: Uint8Array, start: number, end: number): string {
   return String.fromCharCode(...data.slice(start, end))
+}
+
+function objectRecord(value: unknown, path: string): Record<string, unknown> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new AttachmentError(`${path} must be an object.`, 'ATTACHMENT_READ_FAILED')
+  }
+  return value as Record<string, unknown>
+}
+
+function stringField(value: unknown, path: string): string {
+  if (typeof value !== 'string' || value.length === 0) {
+    throw new AttachmentError(`${path} must be a non-empty string.`, 'INVALID_ATTACHMENT_REF')
+  }
+  return value
+}
+
+function positiveIntegerField(value: unknown, path: string): number {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 1) {
+    throw new AttachmentError(`${path} must be a positive integer.`, 'INVALID_ATTACHMENT_REF')
+  }
+  return value
+}
+
+function imageMediaTypeField(value: unknown, path: string): ImageMediaType {
+  if (value === 'image/png' || value === 'image/jpeg' || value === 'image/webp') return value
+  throw new AttachmentError(`${path} must be a supported image media type.`, 'UNSUPPORTED_IMAGE_TYPE')
+}
+
+function bridgeErrorMessage(value: Record<string, unknown>): string {
+  const error = value.error
+  if (typeof error === 'object' && error !== null) {
+    const message = (error as { message?: unknown }).message
+    if (typeof message === 'string') return message
+  }
+  return 'request rejected'
+}
+
+function errorMessage(value: unknown): string {
+  return value instanceof Error ? value.message : String(value)
 }
