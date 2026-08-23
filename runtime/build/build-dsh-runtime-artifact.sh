@@ -60,7 +60,7 @@ PNPM_BIN="${PNPM_BIN:-pnpm}"
 PNPM_STORE_DIR="${PNPM_STORE_DIR:-}"
 DSH_BUILD_COMMAND="${DSH_BUILD_COMMAND:-pnpm run build}"
 DSH_BUILD_LOG_MODE="${DSH_BUILD_LOG_MODE:-summary}"
-DSH_RUNTIME_REQUIRED_WORKSPACE_PACKAGES="${DSH_RUNTIME_REQUIRED_WORKSPACE_PACKAGES:-@deepseek-ai/cordis-plugin-group}"
+DSH_RUNTIME_REQUIRED_WORKSPACE_PACKAGES="${DSH_RUNTIME_REQUIRED_WORKSPACE_PACKAGES:-@deepseek-ai/*}"
 SKIP_INSTALL=false
 SKIP_BUILD=false
 OFFLINE=false
@@ -159,6 +159,62 @@ process.stdout.write(walk(toNodePath(root)));
 NODE
 }
 
+find_workspace_packages_for_spec() {
+  local package_spec="$1"
+  if [[ "$package_spec" != *'*' ]]; then
+    local package_dir
+    package_dir="$(find_workspace_package_dir "$package_spec")"
+    if [[ -n "$package_dir" ]]; then
+      printf '%s\t%s\n' "$package_spec" "$package_dir"
+    fi
+    return 0
+  fi
+
+  run_node - "$SOURCE_DIR" "$package_spec" <<'NODE'
+const fs = require('fs');
+const path = require('path');
+
+const rootArg = process.argv[2];
+const spec = process.argv[3];
+const root = process.platform === 'win32'
+  ? rootArg.replace(/^\/([a-zA-Z])\//, (_, drive) => `${drive}:/`)
+  : rootArg;
+const ignored = new Set(['.git', 'node_modules', '.turbo', '.next', 'dist']);
+const results = [];
+
+function matches(name) {
+  if (spec.endsWith('/*')) return name.startsWith(`${spec.slice(0, -1)}`);
+  const escaped = spec.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replaceAll('\\*', '.*');
+  return new RegExp(`^${escaped}$`, 'u').test(name);
+}
+
+function walk(dir) {
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (ignored.has(entry.name)) continue;
+    const file = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      walk(file);
+      continue;
+    }
+    if (entry.name !== 'package.json') continue;
+    try {
+      const pkg = JSON.parse(fs.readFileSync(file, 'utf8'));
+      if (typeof pkg.name === 'string' && matches(pkg.name)) {
+        results.push([pkg.name, path.dirname(file)]);
+      }
+    } catch {
+      // Keep scanning other package manifests.
+    }
+  }
+}
+
+walk(root);
+for (const [name, dir] of results.sort((a, b) => a[0].localeCompare(b[0]))) {
+  console.log(`${name}\t${dir}`);
+}
+NODE
+}
+
 package_target_dir() {
   local node_modules_dir="$1"
   local package_name="$2"
@@ -167,6 +223,23 @@ package_target_dir() {
   else
     printf '%s/%s\n' "$node_modules_dir" "$package_name"
   fi
+}
+
+relative_symlink_target() {
+  local target="$1"
+  local link_dir="$2"
+  run_node - "$target" "$link_dir" <<'NODE'
+const path = require('path');
+let target = process.argv[2];
+let linkDir = process.argv[3];
+if (process.platform === 'win32') {
+  target = target.replace(/^\/([a-zA-Z])\//, (_, drive) => `${drive}:/`);
+  linkDir = linkDir.replace(/^\/([a-zA-Z])\//, (_, drive) => `${drive}:/`);
+}
+let relative = path.relative(linkDir, target);
+if (!relative.startsWith('.')) relative = `.${path.sep}${relative}`;
+process.stdout.write(relative.split(path.sep).join('/'));
+NODE
 }
 
 copy_workspace_package_to_runtime_target() {
@@ -199,37 +272,69 @@ repair_runtime_workspace_packages() {
   [[ -n "$SOURCE_DIR" ]] || return 0
   [[ -n "$DSH_RUNTIME_REQUIRED_WORKSPACE_PACKAGES" ]] || return 0
 
-  local package_name source_package_dir root_target boot_dir boot_node_modules target copied
-  for package_name in $DSH_RUNTIME_REQUIRED_WORKSPACE_PACKAGES; do
-    source_package_dir="$(find_workspace_package_dir "$package_name")"
-    if [[ -z "$source_package_dir" ]]; then
-      echo "WARN: required workspace package not found in source: $package_name" >&2
+  local packages_file contexts_file
+  packages_file="$WORK_ROOT/required-workspace-packages.tsv"
+  contexts_file="$WORK_ROOT/runtime-node-modules-contexts.txt"
+  : > "$packages_file"
+
+  local package_spec package_name source_package_dir root_target copied found
+  for package_spec in $DSH_RUNTIME_REQUIRED_WORKSPACE_PACKAGES; do
+    found=0
+    while IFS=$'\t' read -r package_name source_package_dir; do
+      [[ -n "$package_name" && -n "$source_package_dir" ]] || continue
+      found=1
+      printf '%s\t%s\n' "$package_name" "$source_package_dir" >> "$packages_file"
+
+      copied=0
+      root_target="$(package_target_dir "$RUNTIME_DIR/node_modules" "$package_name")"
+      if [[ ! -e "$root_target" ]]; then
+        mkdir -p "$(dirname "$root_target")"
+        copy_workspace_package_to_runtime_target "$source_package_dir" "$root_target"
+        copied=$((copied + 1))
+      fi
+
+      if [[ "$copied" -gt 0 ]]; then
+        echo "repaired_workspace_package=$package_name copied_root_targets=$copied"
+      fi
+    done < <(find_workspace_packages_for_spec "$package_spec")
+
+    if [[ "$found" -eq 0 ]]; then
+      echo "WARN: required workspace package spec matched nothing: $package_spec" >&2
       continue
     fi
+  done
 
-    copied=0
-    root_target="$(package_target_dir "$RUNTIME_DIR/node_modules" "$package_name")"
-    if [[ ! -e "$root_target" ]]; then
-      mkdir -p "$(dirname "$root_target")"
-      copy_workspace_package_to_runtime_target "$source_package_dir" "$root_target"
-      copied=$((copied + 1))
-    fi
+  sort -u "$packages_file" -o "$packages_file"
 
-    while IFS= read -r -d '' boot_dir; do
-      boot_node_modules="$(cd "$boot_dir/../.." && pwd)"
-      target="$(package_target_dir "$boot_node_modules" "$package_name")"
-      if [[ -e "$target" ]]; then
+  find "$RUNTIME_DIR/node_modules/.pnpm" -path '*/node_modules' -type d -print 2>/dev/null \
+    | sort -u > "$contexts_file" || true
+  printf '%s\n' "$RUNTIME_DIR/node_modules" >> "$contexts_file"
+  sort -u "$contexts_file" -o "$contexts_file"
+
+  local context_dir target link_dir link_target symlinked
+  symlinked=0
+  while IFS= read -r context_dir; do
+    [[ -n "$context_dir" ]] || continue
+    while IFS=$'\t' read -r package_name source_package_dir; do
+      [[ -n "$package_name" ]] || continue
+      target="$(package_target_dir "$context_dir" "$package_name")"
+      if [[ -e "$target" || -L "$target" ]]; then
         continue
       fi
-      mkdir -p "$(dirname "$target")"
-      copy_workspace_package_to_runtime_target "$source_package_dir" "$target"
-      copied=$((copied + 1))
-    done < <(find "$RUNTIME_DIR/node_modules" -path '*/node_modules/@deepseek-ai/dsh-app-boot' -type d -print0 2>/dev/null)
+      root_target="$(package_target_dir "$RUNTIME_DIR/node_modules" "$package_name")"
+      if [[ ! -e "$root_target" ]]; then
+        echo "WARN: repaired workspace root target missing: $package_name -> $root_target" >&2
+        continue
+      fi
+      link_dir="$(dirname "$target")"
+      mkdir -p "$link_dir"
+      link_target="$(relative_symlink_target "$root_target" "$link_dir")"
+      ln -s "$link_target" "$target"
+      symlinked=$((symlinked + 1))
+    done < "$packages_file"
+  done < "$contexts_file"
 
-    if [[ "$copied" -gt 0 ]]; then
-      echo "repaired_workspace_package=$package_name copied_targets=$copied"
-    fi
-  done
+  echo "repaired_workspace_context_symlinks=$symlinked"
 }
 
 materialize_external_runtime_symlinks() {
