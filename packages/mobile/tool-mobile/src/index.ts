@@ -900,14 +900,69 @@ export function renderMobileOutput(tool: string, value: MobileToolOutput): strin
 export function renderScreenObserveOutput(value: MobileToolOutput): ContentBlock[] {
   const screenshotPath = value.screenshotPath === undefined ? '' : `\nscreenshot: ${value.screenshotPath}`
   const screenshotError = value.screenshotError === undefined ? '' : `\nscreenshot unavailable: ${value.screenshotError}`
+  const renderedValue = {
+    ...value,
+    resultJson: renderModelSafeScreenResultJson(value),
+  }
   const blocks: ContentBlock[] = [{
     type: 'text',
-    text: `${renderMobileOutput('screen.observe', value)}${screenshotPath}${screenshotError}`,
+    text: `${renderMobileOutput('screen.observe', renderedValue)}${screenshotPath}${screenshotError}`,
   }]
   if (value.screenshotAttachment !== undefined) {
     blocks.push({ type: 'image', attachment: value.screenshotAttachment as ImageAttachmentRef })
   }
   return blocks
+}
+
+function renderModelSafeScreenResultJson(value: MobileToolOutput): string {
+  const screenshot = tryParseScreenshotSummary(value.resultJson)
+  if (screenshot === undefined) return value.resultJson
+  return JSON.stringify({
+    mediaType: screenshot.mediaType,
+    width: screenshot.width,
+    height: screenshot.height,
+    bytes: screenshot.bytes,
+    ...screenshot.timestampMillis === undefined ? {} : { timestampMillis: screenshot.timestampMillis },
+    ...value.screenshotAttachment === undefined
+      ? {}
+      : { attachmentId: value.screenshotAttachment.attachmentId },
+  })
+}
+
+function tryParseScreenshotSummary(resultJson: string): {
+  readonly mediaType: string
+  readonly width: number
+  readonly height: number
+  readonly bytes: number
+  readonly timestampMillis?: number
+} | undefined {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(resultJson)
+  } catch {
+    return undefined
+  }
+  if (typeof parsed !== 'object' || parsed === null) return undefined
+  const record = parsed as Record<string, unknown>
+  if (typeof record['base64'] !== 'string') return undefined
+  const mediaType = record['mediaType']
+  const width = record['width']
+  const height = record['height']
+  const bytes = record['bytes']
+  const timestampMillis = record['timestampMillis']
+  if (typeof mediaType !== 'string' ||
+    typeof width !== 'number' ||
+    typeof height !== 'number' ||
+    typeof bytes !== 'number') {
+    return undefined
+  }
+  return {
+    mediaType,
+    width,
+    height,
+    bytes,
+    ...typeof timestampMillis === 'number' ? { timestampMillis } : {},
+  }
 }
 
 /**

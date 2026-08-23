@@ -524,6 +524,43 @@ describe('dsh-tool-mobile', () => {
     })
   })
 
+  it('renders screenshot results without leaking base64 text into model history', () => {
+    const content = renderScreenObserveOutput({
+      ok: true,
+      resultJson: JSON.stringify({
+        mediaType: 'image/png',
+        base64: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB',
+        bytes: 24,
+        width: 1,
+        height: 1,
+        timestampMillis: 123,
+      }),
+      durationMs: 4,
+      screenshotPath: 'android-bridge:screen.screenshot',
+      screenshotAttachment: {
+        attachmentId: `sha256:${'b'.repeat(64)}`,
+        mediaType: 'image/png',
+        bytes: 24,
+        width: 1,
+        height: 1,
+      },
+    })
+
+    expect(content).toHaveLength(2)
+    expect(content[0]).toMatchObject({
+      type: 'text',
+      text: expect.stringContaining('"attachmentId":"sha256:'),
+    })
+    expect(content[0]).toMatchObject({
+      type: 'text',
+      text: expect.not.stringContaining('iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB'),
+    })
+    expect(content[0]).toMatchObject({
+      type: 'text',
+      text: expect.not.stringContaining('"base64"'),
+    })
+  })
+
   it('maps bridge recovery hints into mobile tool output', () => {
     expect(toMobileToolOutput({
       id: 'tap-1',
