@@ -232,7 +232,7 @@ export function apply(ctx: Context, config: Config): void {
   ctx.systemPrompt.section({
     name: 'tool:mobile',
     order: 112,
-    text: 'Use Android mobile tools to observe and operate the current phone through the local bridge. Prefer nodePath actions from screen_observe over coordinates. If your current model can read images, call screen_observe with includeScreenshot=true when the accessibility tree is incomplete or visual layout matters, then use ordinary mobile tools. If your current model is text-only, omit includeScreenshot or set it false; use mobile_visual_step only as a fallback when text observation is insufficient. Search memory before similar tasks, write durable preferences or task lessons after useful outcomes, request user_confirm before sensitive or irreversible effects, and follow recoveryHint guidance when a bridge tool fails.',
+    text: 'Use Android mobile tools to observe and operate the current phone through the local bridge. Screenshots are often the most reliable way to understand visual layout; image-capable main models should call screen_observe with includeScreenshot=true or screen_screenshot when layout, OCR-like reading, or icon-only controls matter. Prefer nodePath actions from screen_observe over coordinates when the node is visible and specific. input_tap/input_swipe/input_type are action tools: their successful results are compact and do not include a fresh screen tree, so call screen_observe or screen_screenshot after an action when you need updated state. If your current model is text-only, omit includeScreenshot or set it false; use mobile_visual_step only as a fallback when text observation is insufficient. Search memory before similar tasks, write durable preferences or task lessons after useful outcomes, request user_confirm before sensitive or irreversible effects, and follow recoveryHint guidance when a bridge tool fails.',
   })
   if (resolved.observe) registerScreenObserve(ctx, resolved)
   if (resolved.tap) registerInputTap(ctx, resolved.timeoutMs)
@@ -303,7 +303,7 @@ function registerScreenObserve(ctx: Context, config: ResolvedConfig): void {
 function registerInputTap(ctx: Context, timeoutMs: number): void {
   ctx.tools.register(defineTool({
     name: 'input_tap',
-    description: 'Tap an Android UI nodePath from screen_observe, or a fallback x/y coordinate.',
+    description: 'Tap an Android UI nodePath from screen_observe, or a fallback x/y coordinate. This action returns only a compact acceptance result; call screen_observe or screen_screenshot afterwards if you need updated screen state.',
     parameters: {
       nodePath: { type: 'string', description: 'Preferred accessible node path from screen_observe.' },
       x: { type: 'integer', description: 'Fallback screen x coordinate.' },
@@ -331,7 +331,7 @@ function registerInputTap(ctx: Context, timeoutMs: number): void {
 function registerInputSwipe(ctx: Context, timeoutMs: number): void {
   ctx.tools.register(defineTool({
     name: 'input_swipe',
-    description: 'Swipe on the Android screen between two coordinates.',
+    description: 'Swipe on the Android screen between two coordinates. This action returns only a compact acceptance result; call screen_observe or screen_screenshot afterwards if you need updated screen state.',
     parameters: {
       startX: { type: 'integer', required: true, description: 'Start x coordinate.' },
       startY: { type: 'integer', required: true, description: 'Start y coordinate.' },
@@ -361,7 +361,7 @@ function registerInputSwipe(ctx: Context, timeoutMs: number): void {
 function registerInputType(ctx: Context, timeoutMs: number): void {
   ctx.tools.register(defineTool({
     name: 'input_type',
-    description: 'Type text into an Android editable nodePath from screen_observe.',
+    description: 'Type text into an Android editable nodePath from screen_observe. This action returns only a compact acceptance result; call screen_observe or screen_screenshot afterwards if you need updated screen state.',
     parameters: {
       nodePath: { type: 'string', required: true, description: 'Editable node path from screen_observe.' },
       text: { type: 'string', required: true, description: 'Text to input.' },
