@@ -11,6 +11,7 @@ import * as toolMobile from '@deepseek-ai/dsh-tool-mobile'
 import {
   parseAndroidShArgs,
   parseApkInstallArgs,
+  parseAppListInstalledArgs,
   parseAppOpenArgs,
   parseAppOpenUrlArgs,
   parseConfirmArgs,
@@ -105,7 +106,10 @@ describe('dsh-tool-mobile parser helpers', () => {
     expect(parseSwipeArgs({ startX: 0, startY: 1, endX: 2, endY: 3, durationMs: 100 }))
       .toEqual({ startX: 0, startY: 1, endX: 2, endY: 3, durationMs: 100 })
     expect(parseTypeArgs({ nodePath: '0/2', text: 'hello' })).toEqual({ nodePath: '0/2', text: 'hello' })
+    expect(parseTypeArgs({ nodePath: '0/2', text: 'hello', replace: true })).toEqual({ nodePath: '0/2', text: 'hello', replace: true })
+    expect(parseTypeArgs({ nodePath: '0/2', text: 'hello', replace: false })).toEqual({ nodePath: '0/2', text: 'hello', replace: false })
     expect(parseAppOpenArgs({ packageName: 'com.example' })).toEqual({ packageName: 'com.example' })
+    expect(parseAppListInstalledArgs({ query: 'chrome', limit: 5 })).toEqual({ query: 'chrome', limit: 5 })
     expect(parseAppOpenUrlArgs({
       url: 'https://example.com',
       packageName: 'com.android.chrome',
@@ -117,6 +121,7 @@ describe('dsh-tool-mobile parser helpers', () => {
     })
     expect(() => parseAppOpenUrlArgs({ url: 'ftp://example.com' })).toThrow(/http/)
     expect(parseConfirmArgs({ title: 'Send?', detail: 'Approve send' })).toEqual({ title: 'Send?', detail: 'Approve send' })
+    expect(() => parseAppListInstalledArgs({ limit: 0 })).toThrow(/positive integer/)
   })
 
   it('validates memory search, write, and forget inputs', () => {
@@ -177,6 +182,7 @@ describe('dsh-tool-mobile', () => {
       'android_sh',
       'apk_install',
       'app_close',
+      'app_list_installed',
       'app_open',
       'app_open_url',
       'input_swipe',
@@ -232,6 +238,42 @@ describe('dsh-tool-mobile', () => {
       tool: 'screen.observe',
       risk: 'read_only',
       arguments: { includeFullTree: true },
+    }])
+  })
+
+  it('passes summary to screen_observe bridge arguments', async () => {
+    const { ctx, provider } = await setup()
+    const result = await ctx.tools.execute({
+      signal: signal(),
+      callId: CallId('observe-summary'),
+      name: 'screen_observe',
+      arguments: { summary: true },
+    })
+
+    expect(result.isError).toBe(false)
+    expect(provider.requests).toEqual([{
+      id: 'observe-summary',
+      tool: 'screen.observe',
+      risk: 'read_only',
+      arguments: { summary: true },
+    }])
+  })
+
+  it('executes app_list_installed through ctx.mobile', async () => {
+    const { ctx, provider } = await setup()
+    const result = await ctx.tools.execute({
+      signal: signal(),
+      callId: CallId('list-apps-1'),
+      name: 'app_list_installed',
+      arguments: { query: 'chrome', limit: 5 },
+    })
+
+    expect(result.isError).toBe(false)
+    expect(provider.requests).toEqual([{
+      id: 'list-apps-1',
+      tool: 'app.list_installed',
+      risk: 'read_only',
+      arguments: { query: 'chrome', limit: 5 },
     }])
   })
 

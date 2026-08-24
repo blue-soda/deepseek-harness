@@ -35,6 +35,8 @@ export interface Config {
   readonly type?: boolean
   /** Register Android app launch action. */
   readonly openApp?: boolean
+  /** Register launchable installed app listing. */
+  readonly listApps?: boolean
   /** Register Android URL open action. */
   readonly openUrl?: boolean
   /** Register Android app close/background action. */
@@ -91,6 +93,7 @@ export const Config: z<Config> = z.object({
   swipe: z.boolean().default(true),
   type: z.boolean().default(true),
   openApp: z.boolean().default(true),
+  listApps: z.boolean().default(true),
   openUrl: z.boolean().default(true),
   closeApp: z.boolean().default(true),
   installApk: z.boolean().default(true),
@@ -215,7 +218,7 @@ const OUTPUT_SCHEMA = {
 const POST_ACTION_PARAMETERS = {
   observeAfter: {
     type: 'boolean',
-    description: 'Set true to include a denoised screen_observe summary in this action result after the action completes.',
+    description: 'Set true to include a denoised screen_observe node tree after the action, or false to suppress the tool default. input_tap already returns a short postActionSummary by default; input_swipe/app_open/app_open_url return a denoised observation by default.',
   },
   screenshotAfter: {
     type: 'boolean',
@@ -246,13 +249,14 @@ export function apply(ctx: Context, config: Config): void {
   ctx.systemPrompt.section({
     name: 'tool:mobile',
     order: 112,
-    text: 'Use Android mobile tools to observe and operate the current phone through the local bridge. Screenshots are often the most reliable way to understand visual layout; image-capable main models should call screen_observe with includeScreenshot=true or screen_screenshot when layout, OCR-like reading, or icon-only controls matter. Prefer nodePath actions from screen_observe over coordinates when the node is visible and specific. input_tap with nodePath defaults to accessibility_then_center, meaning it first tries an Accessibility click and falls back to the node center if needed; use strategy="center" only when Accessibility click is unreliable. If coordinates are needed, use explicit display x/y, normalizedX/normalizedY in 0..1 display space, or screenshotX/screenshotY with returnedWidth/returnedHeight from screen_screenshot. Action tools accept observeAfter and screenshotAfter when an immediate post-action summary or screenshot will reduce round trips. Use android_sh mainly for bounded read-only diagnostics such as getprop, date, uptime, free, ps, logcat -d, /proc reads, toybox, pipes, and small shell logic. Do not rely on android_sh for normal phone control, screenshots, app opening, taps, typing, URL opening, APK installation, or app closing; use the dedicated mobile tools first. android_sh runs as an Android app UID, not root or shell, so many service commands like dumpsys/settings/input/am/pm may require approval or max mode and may still fail because Android denies the app UID. Its cwd must be relative to the DroidPilot workspace. If your current model is text-only, omit includeScreenshot or set it false; use mobile_visual_step only as a fallback when text observation is insufficient. Search memory before similar tasks, write durable preferences or task lessons after useful outcomes, request user_confirm before sensitive or irreversible effects, and follow recoveryHint guidance when a bridge tool fails.',
+    text: 'Use Android mobile tools to observe and operate the current phone through the local bridge. Screenshots are often the most reliable way to understand visual layout; image-capable main models should call screen_observe with includeScreenshot=true or screen_screenshot when layout, OCR-like reading, or icon-only controls matter. Prefer nodePath or clickTargets from screen_observe over coordinates when the node is visible and specific. input_tap with nodePath defaults to accessibility_then_center, meaning it first tries an Accessibility click and falls back to the node center if needed; use strategy="center" for switches, tabs, or controls where Accessibility click is unreliable. If coordinates are needed, use explicit display x/y only when you know Android display pixels, normalizedX/normalizedY in 0..1 display space, or screenshotX/screenshotY with returnedWidth/returnedHeight from screen_screenshot or screen_observe includeScreenshot when the point was measured on the returned screenshot. Do not manually scale screenshot coordinates. input_tap returns a short postActionSummary by default; input_swipe, app_open, and app_open_url return a denoised post-action observation by default unless observeAfter=false. Use app_list_installed to find launchable packages before guessing package names. Use input_type with replace=true to clear/replace existing text, or replace=false to append. Use android_sh mainly for bounded read-only diagnostics such as getprop, date, uptime, free, ps, logcat -d, /proc reads, toybox, pipes, and small shell logic. Do not rely on android_sh for normal phone control, screenshots, app opening, taps, typing, URL opening, APK installation, or app closing; use the dedicated mobile tools first. android_sh runs as an Android app UID, not root or shell, so many service commands like dumpsys/settings/input/am/pm may require approval or max mode and may still fail because Android denies the app UID. Its cwd must be relative to the DroidPilot workspace. If your current model is text-only, omit includeScreenshot or set it false; use mobile_visual_step only as a fallback when text observation is insufficient. Search memory before similar tasks, write durable preferences or task lessons after useful outcomes, request user_confirm before sensitive or irreversible effects, and follow recoveryHint guidance when a bridge tool fails.',
   })
   if (resolved.observe) registerScreenObserve(ctx, resolved)
   if (resolved.tap) registerInputTap(ctx, resolved.timeoutMs)
   if (resolved.swipe) registerInputSwipe(ctx, resolved.timeoutMs)
   if (resolved.type) registerInputType(ctx, resolved.timeoutMs)
   if (resolved.openApp) registerAppOpen(ctx, resolved.timeoutMs)
+  if (resolved.listApps) registerAppListInstalled(ctx, resolved.timeoutMs)
   if (resolved.openUrl) registerAppOpenUrl(ctx, resolved.timeoutMs)
   if (resolved.closeApp) registerAppClose(ctx, resolved.timeoutMs)
   if (resolved.installApk) registerApkInstall(ctx, resolved.timeoutMs)
@@ -286,11 +290,15 @@ export function toMobileToolOutput(response: AndroidToolResponse): MobileToolOut
 function registerScreenObserve(ctx: Context, config: ResolvedConfig): void {
   ctx.tools.register(defineTool({
     name: 'screen_observe',
-    description: 'Observe the current Android foreground app and accessible UI node summary. Image-capable models may set includeScreenshot=true to also receive an adb screenshot image; text-only models should omit it or set false and use mobile_visual_step only if text observation is insufficient.',
+    description: 'Observe the current Android foreground app. Default output is a denoised accessibility node tree plus clickTargets; set summary=true for a short topTexts/clickTargets summary. Image-capable models may set includeScreenshot=true to also receive a screenshot image. Prefer clickTargets/nodePath over coordinates. If measuring a point on the returned screenshot, pass screenshotX/screenshotY with returnedWidth/returnedHeight to input_tap and do not manually scale.',
     parameters: {
       includeScreenshot: {
         type: 'boolean',
         description: 'Set true only when the current main model can read image input and visual layout or OCR-like screen reading is needed. Omit or set false for text-only models.',
+      },
+      summary: {
+        type: 'boolean',
+        description: 'Set true to return only a compact summary with topTexts and clickTargets instead of the denoised node tree.',
       },
       includeFullTree: {
         type: 'boolean',
@@ -309,6 +317,7 @@ function registerScreenObserve(ctx: Context, config: ResolvedConfig): void {
         tool: 'screen.observe',
         risk: 'read_only',
         arguments: {
+          ...args.summary === true ? { summary: true } : {},
           ...args.includeFullTree === true ? { includeFullTree: true } : {},
         },
         ...exec.agent !== undefined ? { sessionId: exec.agent.session.id } : {},
@@ -324,7 +333,7 @@ function registerScreenObserve(ctx: Context, config: ResolvedConfig): void {
 function registerInputTap(ctx: Context, timeoutMs: number): void {
   ctx.tools.register(defineTool({
     name: 'input_tap',
-    description: 'Tap an Android UI nodePath from screen_observe, or explicit display/screenshot coordinates. Prefer nodePath. Use display x/y only when you know the device display coordinate. Use normalizedX/normalizedY for 0..1 display-relative coordinates. Use screenshotX/screenshotY together with returnedWidth/returnedHeight from screen_screenshot when the point was measured on the returned screenshot image. This action returns only a compact acceptance result; call screen_observe or screen_screenshot afterwards if you need updated screen state.',
+    description: 'Tap an Android UI nodePath/clickTarget from screen_observe, or explicit coordinates. Prefer nodePath. Use strategy="center" for switches, tabs, or controls where Accessibility click is unreliable. Use display x/y only for original Android display pixels. Use normalizedX/normalizedY for 0..1 display-relative coordinates. Use screenshotX/screenshotY together with returnedWidth/returnedHeight when the point was measured on the returned screenshot image; do not manually scale. This action returns a compact result plus postActionSummary by default unless observeAfter=false; set observeAfter=true for a denoised node-tree observation.',
     parameters: {
       nodePath: { type: 'string', description: 'Preferred accessible node path from screen_observe.' },
       x: { type: 'integer', description: 'Fallback display-space x coordinate in original Android pixels.' },
@@ -390,7 +399,7 @@ function registerApkInstall(ctx: Context, timeoutMs: number): void {
 function registerInputSwipe(ctx: Context, timeoutMs: number): void {
   ctx.tools.register(defineTool({
     name: 'input_swipe',
-    description: 'Swipe on the Android screen between two coordinates. This action returns only a compact acceptance result; call screen_observe or screen_screenshot afterwards if you need updated screen state.',
+    description: 'Swipe on the Android screen between two display coordinates. By default this returns a denoised post-action observation; set observeAfter=false to suppress it or screenshotAfter=true when visual confirmation is needed.',
     parameters: {
       startX: { type: 'integer', required: true, description: 'Start x coordinate.' },
       startY: { type: 'integer', required: true, description: 'Start y coordinate.' },
@@ -421,10 +430,11 @@ function registerInputSwipe(ctx: Context, timeoutMs: number): void {
 function registerInputType(ctx: Context, timeoutMs: number): void {
   ctx.tools.register(defineTool({
     name: 'input_type',
-    description: 'Type text into an Android editable nodePath from screen_observe. This action returns only a compact acceptance result; call screen_observe or screen_screenshot afterwards if you need updated screen state.',
+    description: 'Type text into an Android editable nodePath from screen_observe. Defaults to replace=true, which clears/replaces the existing field text via Accessibility ACTION_SET_TEXT; set replace=false only when you intentionally want to append. Set observeAfter=true when you need the updated node tree.',
     parameters: {
       nodePath: { type: 'string', required: true, description: 'Editable node path from screen_observe.' },
       text: { type: 'string', required: true, description: 'Text to input.' },
+      replace: { type: 'boolean', description: 'Defaults to true. When true, replace the existing field text; when false, append to the current field text.' },
       ...POST_ACTION_PARAMETERS,
     },
     output: {
@@ -449,7 +459,7 @@ function registerInputType(ctx: Context, timeoutMs: number): void {
 function registerAppOpen(ctx: Context, timeoutMs: number): void {
   ctx.tools.register(defineTool({
     name: 'app_open',
-    description: 'Open an Android app by package name.',
+    description: 'Open an Android app by package name and return a denoised post-launch observation by default. If you do not know the package name, call app_list_installed first instead of guessing.',
     parameters: {
       packageName: { type: 'string', required: true, description: 'Android package name to launch.' },
       ...POST_ACTION_PARAMETERS,
@@ -473,10 +483,37 @@ function registerAppOpen(ctx: Context, timeoutMs: number): void {
   }))
 }
 
+function registerAppListInstalled(ctx: Context, timeoutMs: number): void {
+  ctx.tools.register(defineTool({
+    name: 'app_list_installed',
+    description: 'List launchable Android apps installed on the device. Use this to discover packageName values before app_open, especially on customized Android ROMs where app store/browser package names vary.',
+    parameters: {
+      query: { type: 'string', description: 'Optional case-insensitive filter matched against app label, packageName, or launch activity.' },
+      limit: { type: 'integer', description: 'Maximum number of apps to return. Defaults to the bridge limit.' },
+    },
+    output: {
+      schema: OUTPUT_SCHEMA,
+      render: (_args, value) => [{ type: 'text', text: renderMobileOutput('app.list_installed', value) }],
+    },
+    timeoutMs,
+    isConcurrencySafe: () => true,
+    execute(args, exec) {
+      return executeAndroidTool(ctx, {
+        id: String(exec.callId),
+        tool: 'app.list_installed',
+        risk: 'read_only',
+        arguments: parseAppListInstalledArgs(args),
+        ...exec.agent !== undefined ? { sessionId: exec.agent.session.id } : {},
+      }, exec)
+    },
+    presentCall: args => ({ card: 'generic', title: 'List Android apps', kind: 'read', rawInput: args }),
+  }))
+}
+
 function registerAppOpenUrl(ctx: Context, timeoutMs: number): void {
   ctx.tools.register(defineTool({
     name: 'app_open_url',
-    description: 'Open an HTTP or HTTPS URL on the Android device, optionally forcing a target app package such as com.android.chrome to avoid the system resolver choosing the wrong handler.',
+    description: 'Open an HTTP or HTTPS URL on the Android device and return a denoised post-launch observation by default, optionally forcing a target app package such as com.android.chrome to avoid the system resolver choosing the wrong handler.',
     parameters: {
       url: { type: 'string', required: true, description: 'HTTP or HTTPS URL to open.' },
       packageName: { type: 'string', description: 'Optional installed Android package that should handle the URL.' },
@@ -1151,9 +1188,11 @@ export function parseSwipeArgs(args: unknown): Record<string, unknown> {
  */
 export function parseTypeArgs(args: unknown): Record<string, unknown> {
   const value = objectArgs(args)
+  const replace = optionalBoolean(value, 'replace')
   return {
     nodePath: requiredString(value, 'nodePath'),
     text: requiredString(value, 'text'),
+    ...replace !== undefined ? { replace } : {},
     ...postActionArgs(value),
   }
 }
@@ -1166,6 +1205,22 @@ export function parseTypeArgs(args: unknown): Record<string, unknown> {
 export function parseAppOpenArgs(args: unknown): Record<string, unknown> {
   const value = objectArgs(args)
   return { packageName: requiredString(value, 'packageName'), ...postActionArgs(value) }
+}
+
+/**
+ * Validate `app_list_installed` arguments.
+ * @param args - Model-supplied tool arguments.
+ * @returns Android bridge arguments for `app.list_installed`.
+ */
+export function parseAppListInstalledArgs(args: unknown): Record<string, unknown> {
+  const value = objectArgs(args)
+  const query = optionalString(value, 'query')
+  const limit = optionalInteger(value, 'limit')
+  if (limit !== undefined && limit < 1) throw new Error('app_list_installed limit must be a positive integer')
+  return {
+    ...query !== undefined ? { query } : {},
+    ...limit !== undefined ? { limit } : {},
+  }
 }
 
 /**
