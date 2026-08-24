@@ -39,6 +39,8 @@ export interface Config {
   readonly openUrl?: boolean
   /** Register Android app close/background action. */
   readonly closeApp?: boolean
+  /** Register Android APK installer action. */
+  readonly installApk?: boolean
   /** Register direct Android screenshot capture. */
   readonly screenshot?: boolean
   /** Register Android /system/bin/sh execution through the bridge. */
@@ -91,6 +93,7 @@ export const Config: z<Config> = z.object({
   openApp: z.boolean().default(true),
   openUrl: z.boolean().default(true),
   closeApp: z.boolean().default(true),
+  installApk: z.boolean().default(true),
   screenshot: z.boolean().default(true),
   androidSh: z.boolean().default(true),
   observeScreenshotAdbPath: z.string().default('adb'),
@@ -209,6 +212,17 @@ const OUTPUT_SCHEMA = {
   },
 } as const
 
+const POST_ACTION_PARAMETERS = {
+  observeAfter: {
+    type: 'boolean',
+    description: 'Set true to include a denoised screen_observe summary in this action result after the action completes.',
+  },
+  screenshotAfter: {
+    type: 'boolean',
+    description: 'Set true to include a screen_screenshot result in this action result after the action completes.',
+  },
+} as const
+
 const VISUAL_STEP_OUTPUT_SCHEMA = {
   type: 'object',
   additionalProperties: false,
@@ -232,7 +246,7 @@ export function apply(ctx: Context, config: Config): void {
   ctx.systemPrompt.section({
     name: 'tool:mobile',
     order: 112,
-    text: 'Use Android mobile tools to observe and operate the current phone through the local bridge. Screenshots are often the most reliable way to understand visual layout; image-capable main models should call screen_observe with includeScreenshot=true or screen_screenshot when layout, OCR-like reading, or icon-only controls matter. Prefer nodePath actions from screen_observe over coordinates when the node is visible and specific. input_tap/input_swipe/input_type are action tools: their successful results are compact and do not include a fresh screen tree, so call screen_observe or screen_screenshot after an action when you need updated state. If your current model is text-only, omit includeScreenshot or set it false; use mobile_visual_step only as a fallback when text observation is insufficient. Search memory before similar tasks, write durable preferences or task lessons after useful outcomes, request user_confirm before sensitive or irreversible effects, and follow recoveryHint guidance when a bridge tool fails.',
+    text: 'Use Android mobile tools to observe and operate the current phone through the local bridge. Screenshots are often the most reliable way to understand visual layout; image-capable main models should call screen_observe with includeScreenshot=true or screen_screenshot when layout, OCR-like reading, or icon-only controls matter. Prefer nodePath actions from screen_observe over coordinates when the node is visible and specific. input_tap with nodePath defaults to accessibility_then_center, meaning it first tries an Accessibility click and falls back to the node center if needed; use strategy="center" only when Accessibility click is unreliable. If coordinates are needed, use explicit display x/y, normalizedX/normalizedY in 0..1 display space, or screenshotX/screenshotY with returnedWidth/returnedHeight from screen_screenshot. Action tools accept observeAfter and screenshotAfter when an immediate post-action summary or screenshot will reduce round trips. Use android_sh mainly for bounded read-only diagnostics such as getprop, date, uptime, free, ps, logcat -d, /proc reads, toybox, pipes, and small shell logic. Do not rely on android_sh for normal phone control, screenshots, app opening, taps, typing, URL opening, APK installation, or app closing; use the dedicated mobile tools first. android_sh runs as an Android app UID, not root or shell, so many service commands like dumpsys/settings/input/am/pm may require approval or max mode and may still fail because Android denies the app UID. Its cwd must be relative to the DroidPilot workspace. If your current model is text-only, omit includeScreenshot or set it false; use mobile_visual_step only as a fallback when text observation is insufficient. Search memory before similar tasks, write durable preferences or task lessons after useful outcomes, request user_confirm before sensitive or irreversible effects, and follow recoveryHint guidance when a bridge tool fails.',
   })
   if (resolved.observe) registerScreenObserve(ctx, resolved)
   if (resolved.tap) registerInputTap(ctx, resolved.timeoutMs)
@@ -241,6 +255,7 @@ export function apply(ctx: Context, config: Config): void {
   if (resolved.openApp) registerAppOpen(ctx, resolved.timeoutMs)
   if (resolved.openUrl) registerAppOpenUrl(ctx, resolved.timeoutMs)
   if (resolved.closeApp) registerAppClose(ctx, resolved.timeoutMs)
+  if (resolved.installApk) registerApkInstall(ctx, resolved.timeoutMs)
   if (resolved.screenshot) registerScreenScreenshot(ctx, resolved.timeoutMs)
   if (resolved.androidSh) registerAndroidSh(ctx, resolved.timeoutMs)
   if (resolved.visualStep) registerMobileVisualStep(ctx, resolved)
@@ -277,6 +292,10 @@ function registerScreenObserve(ctx: Context, config: ResolvedConfig): void {
         type: 'boolean',
         description: 'Set true only when the current main model can read image input and visual layout or OCR-like screen reading is needed. Omit or set false for text-only models.',
       },
+      includeFullTree: {
+        type: 'boolean',
+        description: 'Set true only when the default denoised accessibility node summary hides a needed node. This can be large.',
+      },
     },
     output: {
       schema: OUTPUT_SCHEMA,
@@ -289,7 +308,9 @@ function registerScreenObserve(ctx: Context, config: ResolvedConfig): void {
         id: String(exec.callId),
         tool: 'screen.observe',
         risk: 'read_only',
-        arguments: {},
+        arguments: {
+          ...args.includeFullTree === true ? { includeFullTree: true } : {},
+        },
         ...exec.agent !== undefined ? { sessionId: exec.agent.session.id } : {},
       }, exec)
       return args.includeScreenshot === true
@@ -303,11 +324,21 @@ function registerScreenObserve(ctx: Context, config: ResolvedConfig): void {
 function registerInputTap(ctx: Context, timeoutMs: number): void {
   ctx.tools.register(defineTool({
     name: 'input_tap',
-    description: 'Tap an Android UI nodePath from screen_observe, or a fallback x/y coordinate. This action returns only a compact acceptance result; call screen_observe or screen_screenshot afterwards if you need updated screen state.',
+    description: 'Tap an Android UI nodePath from screen_observe, or explicit display/screenshot coordinates. Prefer nodePath. Use display x/y only when you know the device display coordinate. Use normalizedX/normalizedY for 0..1 display-relative coordinates. Use screenshotX/screenshotY together with returnedWidth/returnedHeight from screen_screenshot when the point was measured on the returned screenshot image. This action returns only a compact acceptance result; call screen_observe or screen_screenshot afterwards if you need updated screen state.',
     parameters: {
       nodePath: { type: 'string', description: 'Preferred accessible node path from screen_observe.' },
-      x: { type: 'integer', description: 'Fallback screen x coordinate.' },
-      y: { type: 'integer', description: 'Fallback screen y coordinate.' },
+      x: { type: 'integer', description: 'Fallback display-space x coordinate in original Android pixels.' },
+      y: { type: 'integer', description: 'Fallback display-space y coordinate in original Android pixels.' },
+      normalizedX: { type: 'number', description: 'Fallback x coordinate in normalized display space, from 0.0 left to 1.0 right.' },
+      normalizedY: { type: 'number', description: 'Fallback y coordinate in normalized display space, from 0.0 top to 1.0 bottom.' },
+      screenshotX: { type: 'number', description: 'Fallback x coordinate measured on the returned screenshot image.' },
+      screenshotY: { type: 'number', description: 'Fallback y coordinate measured on the returned screenshot image.' },
+      returnedWidth: { type: 'number', description: 'Width of the returned screenshot image used with screenshotX/screenshotY.' },
+      returnedHeight: { type: 'number', description: 'Height of the returned screenshot image used with screenshotX/screenshotY.' },
+      originalWidth: { type: 'number', description: 'Optional original display width from screen_screenshot; inferred by the bridge when omitted.' },
+      originalHeight: { type: 'number', description: 'Optional original display height from screen_screenshot; inferred by the bridge when omitted.' },
+      strategy: { type: 'string', description: 'NodePath tap strategy: accessibility_then_center (default), accessibility, or center.' },
+      ...POST_ACTION_PARAMETERS,
     },
     output: {
       schema: OUTPUT_SCHEMA,
@@ -328,6 +359,34 @@ function registerInputTap(ctx: Context, timeoutMs: number): void {
   }))
 }
 
+function registerApkInstall(ctx: Context, timeoutMs: number): void {
+  ctx.tools.register(defineTool({
+    name: 'apk_install',
+    description: 'Open Android system package installer for an APK that is accessible to DeepDroidPilot. This does not silently install the APK; the user must confirm the Android installer prompt. Prefer this over coordinate tapping inside system install dialogs.',
+    parameters: {
+      filePath: { type: 'string', description: 'APK file path in the DeepDroidPilot app private files directory.' },
+      contentUri: { type: 'string', description: 'Optional Android content:// URI for an APK that the app can grant to the installer.' },
+      ...POST_ACTION_PARAMETERS,
+    },
+    output: {
+      schema: OUTPUT_SCHEMA,
+      render: (_args, value) => [{ type: 'text', text: renderMobileOutput('apk.install', value) }],
+    },
+    timeoutMs,
+    execute(args, exec) {
+      const input = parseApkInstallArgs(args)
+      return executeAndroidTool(ctx, {
+        id: String(exec.callId),
+        tool: 'apk.install',
+        risk: 'sensitive',
+        arguments: input,
+        ...exec.agent !== undefined ? { sessionId: exec.agent.session.id } : {},
+      }, exec)
+    },
+    presentCall: args => ({ card: 'generic', title: 'Install Android APK', kind: 'other', rawInput: args }),
+  }))
+}
+
 function registerInputSwipe(ctx: Context, timeoutMs: number): void {
   ctx.tools.register(defineTool({
     name: 'input_swipe',
@@ -338,6 +397,7 @@ function registerInputSwipe(ctx: Context, timeoutMs: number): void {
       endX: { type: 'integer', required: true, description: 'End x coordinate.' },
       endY: { type: 'integer', required: true, description: 'End y coordinate.' },
       durationMs: { type: 'integer', description: 'Swipe duration in milliseconds.' },
+      ...POST_ACTION_PARAMETERS,
     },
     output: {
       schema: OUTPUT_SCHEMA,
@@ -365,6 +425,7 @@ function registerInputType(ctx: Context, timeoutMs: number): void {
     parameters: {
       nodePath: { type: 'string', required: true, description: 'Editable node path from screen_observe.' },
       text: { type: 'string', required: true, description: 'Text to input.' },
+      ...POST_ACTION_PARAMETERS,
     },
     output: {
       schema: OUTPUT_SCHEMA,
@@ -391,6 +452,7 @@ function registerAppOpen(ctx: Context, timeoutMs: number): void {
     description: 'Open an Android app by package name.',
     parameters: {
       packageName: { type: 'string', required: true, description: 'Android package name to launch.' },
+      ...POST_ACTION_PARAMETERS,
     },
     output: {
       schema: OUTPUT_SCHEMA,
@@ -414,9 +476,11 @@ function registerAppOpen(ctx: Context, timeoutMs: number): void {
 function registerAppOpenUrl(ctx: Context, timeoutMs: number): void {
   ctx.tools.register(defineTool({
     name: 'app_open_url',
-    description: 'Open an HTTP or HTTPS URL on the Android device with the system browser/app resolver.',
+    description: 'Open an HTTP or HTTPS URL on the Android device, optionally forcing a target app package such as com.android.chrome to avoid the system resolver choosing the wrong handler.',
     parameters: {
       url: { type: 'string', required: true, description: 'HTTP or HTTPS URL to open.' },
+      packageName: { type: 'string', description: 'Optional installed Android package that should handle the URL.' },
+      ...POST_ACTION_PARAMETERS,
     },
     output: {
       schema: OUTPUT_SCHEMA,
@@ -441,18 +505,18 @@ function registerAppClose(ctx: Context, timeoutMs: number): void {
   ctx.tools.register(defineTool({
     name: 'app_close',
     description: 'Move the current Android foreground app to the background with the system Home action.',
-    parameters: {},
+    parameters: POST_ACTION_PARAMETERS,
     output: {
       schema: OUTPUT_SCHEMA,
       render: (_args, value) => [{ type: 'text', text: renderMobileOutput('app.close', value) }],
     },
     timeoutMs,
-    execute(_args, exec) {
+    execute(args, exec) {
       return executeAndroidTool(ctx, {
         id: String(exec.callId),
         tool: 'app.close',
         risk: 'reversible',
-        arguments: {},
+        arguments: postActionArgs(objectArgs(args)),
         ...exec.agent !== undefined ? { sessionId: exec.agent.session.id } : {},
       }, exec)
     },
@@ -488,10 +552,10 @@ function registerScreenScreenshot(ctx: Context, timeoutMs: number): void {
 function registerAndroidSh(ctx: Context, timeoutMs: number): void {
   ctx.tools.register(defineTool({
     name: 'android_sh',
-    description: 'Run a bounded Android /system/bin/sh command in the DroidPilot workspace through the Android bridge. Use mode="safe" for ordinary read-only diagnostics, mode="approval" when a command needs explicit user approval, and mode="max" only when the user has asked for the highest app-UID permissions Android can grant.',
+    description: 'Run a bounded Android /system/bin/sh command in the DroidPilot workspace through the Android bridge. This is best for read-only diagnostics and small shell logic, not normal phone control. It runs as an Android app UID, not root or shell; system-service commands such as dumpsys/settings/input/am/pm may require approval or max mode and can still be denied. Prefer dedicated tools for screen observation, screenshots, app opening, tapping, typing, URL opening, APK installation, and app closing. Use mode="safe" for ordinary read-only diagnostics, mode="approval" when a command needs explicit user approval, and mode="max" only when the user has asked for the highest app-UID permissions Android can grant.',
     parameters: {
       command: { type: 'string', required: true, description: 'Shell command passed to /system/bin/sh -c.' },
-      cwd: { type: 'string', description: 'Relative working directory under the DroidPilot workspace.' },
+      cwd: { type: 'string', description: 'Relative working directory under the DroidPilot workspace. Absolute paths are rejected.' },
       mode: { type: 'string', description: 'One of safe, approval, or max. Defaults to safe.' },
       timeoutMs: { type: 'integer', description: 'Command timeout in milliseconds.' },
       maxOutputBytes: { type: 'integer', description: 'Maximum bytes captured separately from stdout and stderr.' },
@@ -922,6 +986,11 @@ function renderModelSafeScreenResultJson(value: MobileToolOutput): string {
     width: screenshot.width,
     height: screenshot.height,
     bytes: screenshot.bytes,
+    ...screenshot.originalWidth === undefined ? {} : { originalWidth: screenshot.originalWidth },
+    ...screenshot.originalHeight === undefined ? {} : { originalHeight: screenshot.originalHeight },
+    ...screenshot.returnedWidth === undefined ? {} : { returnedWidth: screenshot.returnedWidth },
+    ...screenshot.returnedHeight === undefined ? {} : { returnedHeight: screenshot.returnedHeight },
+    ...screenshot.coordinateSpace === undefined ? {} : { coordinateSpace: screenshot.coordinateSpace },
     ...screenshot.timestampMillis === undefined ? {} : { timestampMillis: screenshot.timestampMillis },
     ...value.screenshotAttachment === undefined
       ? {}
@@ -934,6 +1003,11 @@ function tryParseScreenshotSummary(resultJson: string): {
   readonly width: number
   readonly height: number
   readonly bytes: number
+  readonly originalWidth?: number
+  readonly originalHeight?: number
+  readonly returnedWidth?: number
+  readonly returnedHeight?: number
+  readonly coordinateSpace?: string
   readonly timestampMillis?: number
 } | undefined {
   let parsed: unknown
@@ -949,6 +1023,11 @@ function tryParseScreenshotSummary(resultJson: string): {
   const width = record['width']
   const height = record['height']
   const bytes = record['bytes']
+  const originalWidth = record['originalWidth']
+  const originalHeight = record['originalHeight']
+  const returnedWidth = record['returnedWidth']
+  const returnedHeight = record['returnedHeight']
+  const coordinateSpace = record['coordinateSpace']
   const timestampMillis = record['timestampMillis']
   if (typeof mediaType !== 'string' ||
     typeof width !== 'number' ||
@@ -961,6 +1040,11 @@ function tryParseScreenshotSummary(resultJson: string): {
     width,
     height,
     bytes,
+    ...typeof originalWidth === 'number' ? { originalWidth } : {},
+    ...typeof originalHeight === 'number' ? { originalHeight } : {},
+    ...typeof returnedWidth === 'number' ? { returnedWidth } : {},
+    ...typeof returnedHeight === 'number' ? { returnedHeight } : {},
+    ...typeof coordinateSpace === 'string' ? { coordinateSpace } : {},
     ...typeof timestampMillis === 'number' ? { timestampMillis } : {},
   }
 }
@@ -988,11 +1072,59 @@ export function renderMobileVisualStepOutput(value: MobileVisualStepOutput): str
  */
 export function parseTapArgs(args: unknown): Record<string, unknown> {
   const value = objectArgs(args)
+  const postAction = postActionArgs(value)
+  const strategy = optionalString(value, 'strategy')
+  if (strategy !== undefined && !['accessibility_then_center', 'accessibility', 'center'].includes(strategy)) {
+    throw new Error('input_tap strategy must be one of accessibility_then_center, accessibility, or center')
+  }
+  const strategyArgs = strategy === undefined ? {} : { strategy }
   const nodePath = optionalString(value, 'nodePath')
-  if (nodePath !== undefined) return { nodePath }
-  const x = requiredInteger(value, 'x')
-  const y = requiredInteger(value, 'y')
-  return { x, y }
+  if (nodePath !== undefined) return { nodePath, ...strategyArgs, ...postAction }
+  const x = optionalInteger(value, 'x')
+  const y = optionalInteger(value, 'y')
+  if (x !== undefined || y !== undefined) {
+    if (x === undefined || y === undefined) throw new Error('input_tap requires both x and y display coordinates')
+    return { x, y, ...postAction }
+  }
+  const normalizedX = optionalNumber(value, 'normalizedX')
+  const normalizedY = optionalNumber(value, 'normalizedY')
+  if (normalizedX !== undefined || normalizedY !== undefined) {
+    if (normalizedX === undefined || normalizedY === undefined) {
+      throw new Error('input_tap requires both normalizedX and normalizedY')
+    }
+    return { normalizedX, normalizedY, ...postAction }
+  }
+  const screenshotX = optionalNumber(value, 'screenshotX')
+  const screenshotY = optionalNumber(value, 'screenshotY')
+  if (screenshotX !== undefined || screenshotY !== undefined) {
+    if (screenshotX === undefined || screenshotY === undefined) {
+      throw new Error('input_tap requires both screenshotX and screenshotY')
+    }
+    const originalWidth = optionalNumber(value, 'originalWidth')
+    const originalHeight = optionalNumber(value, 'originalHeight')
+    return {
+      screenshotX,
+      screenshotY,
+      returnedWidth: requiredNumber(value, 'returnedWidth'),
+      returnedHeight: requiredNumber(value, 'returnedHeight'),
+      ...originalWidth !== undefined ? { originalWidth } : {},
+      ...originalHeight !== undefined ? { originalHeight } : {},
+      ...postAction,
+    }
+  }
+  throw new Error('input_tap requires nodePath, x/y, normalizedX/normalizedY, or screenshotX/screenshotY with returnedWidth/returnedHeight')
+}
+
+/**
+ * Validate `apk_install` arguments.
+ * @param args - Model-supplied tool arguments.
+ * @returns Android bridge arguments for `apk.install`.
+ */
+export function parseApkInstallArgs(args: unknown): Record<string, unknown> {
+  const value = objectArgs(args)
+  const contentUri = optionalString(value, 'contentUri')
+  if (contentUri !== undefined) return { contentUri, ...postActionArgs(value) }
+  return { filePath: requiredString(value, 'filePath'), ...postActionArgs(value) }
 }
 
 /**
@@ -1008,6 +1140,7 @@ export function parseSwipeArgs(args: unknown): Record<string, unknown> {
     endX: requiredInteger(value, 'endX'),
     endY: requiredInteger(value, 'endY'),
     ...optionalInteger(value, 'durationMs') !== undefined ? { durationMs: optionalInteger(value, 'durationMs') } : {},
+    ...postActionArgs(value),
   }
 }
 
@@ -1021,6 +1154,7 @@ export function parseTypeArgs(args: unknown): Record<string, unknown> {
   return {
     nodePath: requiredString(value, 'nodePath'),
     text: requiredString(value, 'text'),
+    ...postActionArgs(value),
   }
 }
 
@@ -1030,7 +1164,8 @@ export function parseTypeArgs(args: unknown): Record<string, unknown> {
  * @returns Android bridge arguments for `app.open`.
  */
 export function parseAppOpenArgs(args: unknown): Record<string, unknown> {
-  return { packageName: requiredString(objectArgs(args), 'packageName') }
+  const value = objectArgs(args)
+  return { packageName: requiredString(value, 'packageName'), ...postActionArgs(value) }
 }
 
 /**
@@ -1039,11 +1174,17 @@ export function parseAppOpenArgs(args: unknown): Record<string, unknown> {
  * @returns Android bridge arguments for `app.open_url`.
  */
 export function parseAppOpenUrlArgs(args: unknown): Record<string, unknown> {
-  const url = requiredString(objectArgs(args), 'url').trim()
+  const value = objectArgs(args)
+  const url = requiredString(value, 'url').trim()
   if (!url.startsWith('http://') && !url.startsWith('https://')) {
     throw new Error('url must start with http:// or https://')
   }
-  return { url }
+  const packageName = optionalString(value, 'packageName')
+  return {
+    url,
+    ...packageName !== undefined ? { packageName } : {},
+    ...postActionArgs(value),
+  }
 }
 
 /**
@@ -1328,8 +1469,8 @@ function visualActionToBridgeRequest(
         tool: 'input.tap',
         risk: 'reversible',
         arguments: {
-          x: normalizedToPx(requiredActionNumber(action, 'x'), config.screenWidth),
-          y: normalizedToPx(requiredActionNumber(action, 'y'), config.screenHeight),
+          normalizedX: normalizedToUnit(requiredActionNumber(action, 'x')),
+          normalizedY: normalizedToUnit(requiredActionNumber(action, 'y')),
         },
         ...session,
       }
@@ -1445,6 +1586,10 @@ function normalizedToPx(value: number, size: number): number {
   return Math.round((clamped / 1000) * (size - 1))
 }
 
+function normalizedToUnit(value: number): number {
+  return Math.max(0, Math.min(1000, value)) / 1000
+}
+
 function requiredActionString(value: Record<string, unknown>, key: string): string {
   const item = optionalActionString(value, key)
   if (item === undefined) throw new Error(`vision action ${key} must be a non-empty string`)
@@ -1507,6 +1652,15 @@ function objectArgs(args: unknown): Record<string, unknown> {
   return args as Record<string, unknown>
 }
 
+function postActionArgs(value: Record<string, unknown>): Record<string, boolean> {
+  const observeAfter = optionalBoolean(value, 'observeAfter')
+  const screenshotAfter = optionalBoolean(value, 'screenshotAfter')
+  return {
+    ...observeAfter !== undefined ? { observeAfter } : {},
+    ...screenshotAfter !== undefined ? { screenshotAfter } : {},
+  }
+}
+
 function requiredString(value: Record<string, unknown>, key: string): string {
   const item = value[key]
   if (typeof item !== 'string' || item.trim().length === 0) {
@@ -1524,6 +1678,13 @@ function optionalString(value: Record<string, unknown>, key: string): string | u
   return item
 }
 
+function optionalBoolean(value: Record<string, unknown>, key: string): boolean | undefined {
+  const item = value[key]
+  if (item === undefined) return undefined
+  if (typeof item !== 'boolean') throw new Error(`${key} must be a boolean`)
+  return item
+}
+
 function requiredInteger(value: Record<string, unknown>, key: string): number {
   const item = optionalInteger(value, key)
   if (item === undefined) throw new Error(`${key} must be an integer`)
@@ -1534,6 +1695,19 @@ function optionalInteger(value: Record<string, unknown>, key: string): number | 
   const item = value[key]
   if (item === undefined) return undefined
   if (typeof item !== 'number' || !Number.isInteger(item)) throw new Error(`${key} must be an integer`)
+  return item
+}
+
+function requiredNumber(value: Record<string, unknown>, key: string): number {
+  const item = optionalNumber(value, key)
+  if (item === undefined) throw new Error(`${key} must be a finite number`)
+  return item
+}
+
+function optionalNumber(value: Record<string, unknown>, key: string): number | undefined {
+  const item = value[key]
+  if (item === undefined) return undefined
+  if (typeof item !== 'number' || !Number.isFinite(item)) throw new Error(`${key} must be a finite number`)
   return item
 }
 

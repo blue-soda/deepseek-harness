@@ -10,6 +10,7 @@ import ToolRuntime from '@deepseek-ai/dsh-tools'
 import * as toolMobile from '@deepseek-ai/dsh-tool-mobile'
 import {
   parseAndroidShArgs,
+  parseApkInstallArgs,
   parseAppOpenArgs,
   parseAppOpenUrlArgs,
   parseConfirmArgs,
@@ -84,8 +85,20 @@ function fakeAgent(ctx: Context, id: string): Agent {
 describe('dsh-tool-mobile parser helpers', () => {
   it('prefers nodePath taps and falls back to x/y coordinates', () => {
     expect(parseTapArgs({ nodePath: '0/1' })).toEqual({ nodePath: '0/1' })
+    expect(parseTapArgs({
+      nodePath: '0/1',
+      strategy: 'center',
+      observeAfter: true,
+      screenshotAfter: true,
+    })).toEqual({
+      nodePath: '0/1',
+      strategy: 'center',
+      observeAfter: true,
+      screenshotAfter: true,
+    })
     expect(parseTapArgs({ x: 10, y: 20 })).toEqual({ x: 10, y: 20 })
-    expect(() => parseTapArgs({ x: 10 })).toThrow(/y must be an integer/)
+    expect(() => parseTapArgs({ x: 10 })).toThrow(/both x and y/)
+    expect(() => parseTapArgs({ nodePath: '0/1', strategy: 'manual' })).toThrow(/strategy/)
   })
 
   it('validates swipe, type, app open, and confirmation inputs', () => {
@@ -93,7 +106,15 @@ describe('dsh-tool-mobile parser helpers', () => {
       .toEqual({ startX: 0, startY: 1, endX: 2, endY: 3, durationMs: 100 })
     expect(parseTypeArgs({ nodePath: '0/2', text: 'hello' })).toEqual({ nodePath: '0/2', text: 'hello' })
     expect(parseAppOpenArgs({ packageName: 'com.example' })).toEqual({ packageName: 'com.example' })
-    expect(parseAppOpenUrlArgs({ url: 'https://example.com' })).toEqual({ url: 'https://example.com' })
+    expect(parseAppOpenUrlArgs({
+      url: 'https://example.com',
+      packageName: 'com.android.chrome',
+      observeAfter: true,
+    })).toEqual({
+      url: 'https://example.com',
+      packageName: 'com.android.chrome',
+      observeAfter: true,
+    })
     expect(() => parseAppOpenUrlArgs({ url: 'ftp://example.com' })).toThrow(/http/)
     expect(parseConfirmArgs({ title: 'Send?', detail: 'Approve send' })).toEqual({ title: 'Send?', detail: 'Approve send' })
   })
@@ -119,6 +140,34 @@ describe('dsh-tool-mobile parser helpers', () => {
     expect(() => parseMemoryWriteArgs({ text: 'x', metadata: { topic: 1 } })).toThrow(/metadata.topic/)
     expect(() => parseAndroidShArgs({ command: 'pwd', mode: 'root' })).toThrow(/mode must be one of/)
   })
+
+  it('validates explicit tap coordinate modes and apk install inputs', () => {
+    expect(parseTapArgs({ normalizedX: 0.25, normalizedY: 0.75 })).toEqual({
+      normalizedX: 0.25,
+      normalizedY: 0.75,
+    })
+    expect(parseTapArgs({
+      screenshotX: 120,
+      screenshotY: 240,
+      returnedWidth: 536,
+      returnedHeight: 1194,
+      originalWidth: 1280,
+      originalHeight: 2856,
+    })).toEqual({
+      screenshotX: 120,
+      screenshotY: 240,
+      returnedWidth: 536,
+      returnedHeight: 1194,
+      originalWidth: 1280,
+      originalHeight: 2856,
+    })
+    expect(parseApkInstallArgs({ filePath: '/data/user/0/app/files/downloads/app.apk' }))
+      .toEqual({ filePath: '/data/user/0/app/files/downloads/app.apk' })
+    expect(parseApkInstallArgs({ contentUri: 'content://example/app.apk' }))
+      .toEqual({ contentUri: 'content://example/app.apk' })
+    expect(() => parseTapArgs({ x: 1 })).toThrow(/both x and y/)
+    expect(() => parseTapArgs({ screenshotX: 1, screenshotY: 2 })).toThrow(/returnedWidth/)
+  })
 })
 
 describe('dsh-tool-mobile', () => {
@@ -126,6 +175,7 @@ describe('dsh-tool-mobile', () => {
     const { ctx } = await setup()
     expect(ctx.tools.schemas().map(schema => schema.name).filter(name => name.includes('_')).sort()).toEqual([
       'android_sh',
+      'apk_install',
       'app_close',
       'app_open',
       'app_open_url',
@@ -148,7 +198,7 @@ describe('dsh-tool-mobile', () => {
       signal: signal(),
       callId: CallId('tap-1'),
       name: 'input_tap',
-      arguments: { nodePath: '0/1' },
+      arguments: { nodePath: '0/1', strategy: 'accessibility_then_center', observeAfter: true },
     })
 
     expect(result.isError).toBe(false)
@@ -157,14 +207,32 @@ describe('dsh-tool-mobile', () => {
       id: 'tap-1',
       tool: 'input.tap',
       risk: 'reversible',
-      arguments: { nodePath: '0/1' },
+      arguments: { nodePath: '0/1', strategy: 'accessibility_then_center', observeAfter: true },
     }])
     expect(result.value).toEqual({
       ok: true,
-      resultJson: '{"echoed":{"nodePath":"0/1"}}',
+      resultJson: '{"echoed":{"nodePath":"0/1","strategy":"accessibility_then_center","observeAfter":true}}',
       durationMs: 7,
     })
     expect(resultText(result)).toContain('input.tap ok in 7ms')
+  })
+
+  it('passes includeFullTree to screen_observe bridge arguments', async () => {
+    const { ctx, provider } = await setup()
+    const result = await ctx.tools.execute({
+      signal: signal(),
+      callId: CallId('observe-full-tree'),
+      name: 'screen_observe',
+      arguments: { includeFullTree: true },
+    })
+
+    expect(result.isError).toBe(false)
+    expect(provider.requests).toEqual([{
+      id: 'observe-full-tree',
+      tool: 'screen.observe',
+      risk: 'read_only',
+      arguments: { includeFullTree: true },
+    }])
   })
 
   it('executes app_open_url through ctx.mobile', async () => {
@@ -173,7 +241,7 @@ describe('dsh-tool-mobile', () => {
       signal: signal(),
       callId: CallId('open-url-1'),
       name: 'app_open_url',
-      arguments: { url: 'https://www.google.com/search?q=Deepseek' },
+      arguments: { url: 'https://www.google.com/search?q=Deepseek', packageName: 'com.android.chrome', screenshotAfter: true },
     })
 
     expect(result.isError).toBe(false)
@@ -181,7 +249,11 @@ describe('dsh-tool-mobile', () => {
       id: 'open-url-1',
       tool: 'app.open_url',
       risk: 'external_side_effect',
-      arguments: { url: 'https://www.google.com/search?q=Deepseek' },
+      arguments: {
+        url: 'https://www.google.com/search?q=Deepseek',
+        packageName: 'com.android.chrome',
+        screenshotAfter: true,
+      },
     }])
   })
 
@@ -454,7 +526,7 @@ describe('dsh-tool-mobile', () => {
       arguments: { x: 1 },
     })
     expect(result.isError).toBe(true)
-    expect(resultText(result)).toContain('y must be an integer')
+    expect(resultText(result)).toContain('both x and y')
     expect(provider.requests).toEqual([])
   })
 
@@ -533,6 +605,11 @@ describe('dsh-tool-mobile', () => {
         bytes: 24,
         width: 1,
         height: 1,
+        originalWidth: 1280,
+        originalHeight: 2856,
+        returnedWidth: 536,
+        returnedHeight: 1194,
+        coordinateSpace: 'display',
         timestampMillis: 123,
       }),
       durationMs: 4,
@@ -558,6 +635,18 @@ describe('dsh-tool-mobile', () => {
     expect(content[0]).toMatchObject({
       type: 'text',
       text: expect.not.stringContaining('"base64"'),
+    })
+    expect(content[0]).toMatchObject({
+      type: 'text',
+      text: expect.stringContaining('"originalWidth":1280'),
+    })
+    expect(content[0]).toMatchObject({
+      type: 'text',
+      text: expect.stringContaining('"returnedHeight":1194'),
+    })
+    expect(content[0]).toMatchObject({
+      type: 'text',
+      text: expect.stringContaining('"coordinateSpace":"display"'),
     })
   })
 
