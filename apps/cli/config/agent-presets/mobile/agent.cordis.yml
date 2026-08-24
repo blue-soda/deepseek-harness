@@ -1,12 +1,15 @@
 # The `mobile` agent preset: a mobile-focused coding agent that can operate an
-# Android device through the DeepDroidPilot localhost bridge.
+# Android device through the DeepDroidPilot localhost bridge and extend its
+# running DSH host with temporary Cordis plugins.
 
 - id: persona
   name: '@deepseek-ai/dsh-persona'
   config:
-    text: >-
+    text: |-
       You are a coding agent powered by the {{model}} model. Your working directory is {{cwd}}.
-      You can also observe and operate an attached Android device through the local DeepDroidPilot bridge.
+      You can observe and operate an attached Android device through the local DeepDroidPilot bridge.
+
+      You can also inspect and temporarily extend the running DSH host with Cordis dynamic plugins. On Android, prefer Host-only plugins that register tools, prompt sections, memory helpers, workflow helpers, or lightweight runtime behavior. Do not assume browser Client UI, desktop subprocess providers, npm package installation, or APK/native UI changes are available inside the embedded runtime. A dynamic Cordis plugin extends this running DSH process; durable Android app changes still require source changes and a rebuilt APK.
 
 - id: agent-instructions
   name: '@deepseek-ai/dsh-agent-instructions'
@@ -33,6 +36,27 @@
   name: '@deepseek-ai/dsh-tool-todo'
   config:
     allowParallelInProgress: true
+
+# ── self-extension ──────────────────────────────────────────────────────────
+
+# Read the live runtime, define temporary plugins, run/stop/update them, and
+# inspect failures. This is powerful: generated JavaScript executes inside the
+# embedded DSH host, so use it as runtime extension rather than as a substitute
+# for reviewed APK source changes.
+- id: tool-cordis
+  name: '@deepseek-ai/dsh-tool-cordis'
+
+# The Cordis authoring skills are bundled with the mobile preset so the Android
+# agent can look up exact composition/plugin patterns before writing dynamic
+# code. `baseUrl` is this preset directory in the installed DSH config.
+- id: skill-filesystem
+  name: '@deepseek-ai/dsh-skill-filesystem'
+  config:
+    customSkillDirs:
+      - !!js "process.getBuiltinModule('node:url').fileURLToPath(new URL('skills/', baseUrl))"
+
+- id: tool-skill
+  name: '@deepseek-ai/dsh-tool-skill'
 
 - id: mobile
   name: cordis:group

@@ -278,6 +278,13 @@ describe('the shipped Web composition', () => {
       const scopedTools = toolNames(ctx, handle.agent)
       expect(scopedTools).toEqual(expect.arrayContaining([
         'app_open',
+        'cordis_define',
+        'cordis_inspect_list',
+        'cordis_inspect_query',
+        'cordis_inspect_self',
+        'cordis_run',
+        'cordis_stop',
+        'cordis_undefine',
         'input_swipe',
         'input_tap',
         'input_type',
@@ -288,6 +295,12 @@ describe('the shipped Web composition', () => {
         'todo_write',
         'user_confirm',
       ]))
+      const scopedSkills = (await ctx.skills.list({ scope: handle.agent })).map(skill => skill.name)
+      expect(scopedSkills).toEqual(expect.arrayContaining([
+        'cordis-plugin-development',
+        'editing-cordis-compositions',
+      ]))
+      expect((await ctx.skills.list()).map(skill => skill.name)).not.toContain('cordis-plugin-development')
       expect(toolNames(ctx)).toEqual([])
     } finally {
       await handle.dispose()

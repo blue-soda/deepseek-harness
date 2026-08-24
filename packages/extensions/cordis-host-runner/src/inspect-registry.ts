@@ -29,6 +29,11 @@ export interface HostCordisInspectProviderRegistration {
   query(method: string, input: JsonValue | undefined, context: HostCordisInspectQueryContext): Promise<JsonValue>
 }
 
+interface HostProviderEntry {
+  manifest: CordisInspectProviderManifest
+  registrations: HostCordisInspectProviderRegistration[]
+}
+
 interface PendingClientQuery {
   request: CordisInspectQueryRequest
   method: CordisInspectMethodManifest
@@ -44,7 +49,7 @@ declare module '@deepseek-ai/cordis' {
 
 /** Registry and cross-page router behind the two model-facing inspect tools. */
 export class CordisInspectRegistryService extends Service {
-  private readonly providers = new Map<string, HostCordisInspectProviderRegistration>()
+  private readonly providers = new Map<string, HostProviderEntry>()
   private readonly pending = new Map<CordisInspectRequestId, PendingClientQuery>()
   private clientManifest: readonly CordisInspectProviderManifest[] | undefined
   private nextRequest = 1
@@ -61,11 +66,30 @@ export class CordisInspectRegistryService extends Service {
    */
   register(registration: HostCordisInspectProviderRegistration): () => void {
     const manifest = validateManifest(registration.manifest)
-    if (this.providers.has(manifest.id)) throw new Error(`Host Cordis inspect provider "${manifest.id}" is already registered`)
+    const existing = this.providers.get(manifest.id)
+    if (existing !== undefined) {
+      if (!sameManifest(existing.manifest, manifest)) {
+        throw new Error(`Host Cordis inspect provider "${manifest.id}" is already registered with a different manifest`)
+      }
+      const stored = { ...registration, manifest }
+      existing.registrations.push(stored)
+      return () => {
+        const current = this.providers.get(manifest.id)
+        if (current !== existing) return
+        const index = current.registrations.indexOf(stored)
+        if (index >= 0) current.registrations.splice(index, 1)
+        if (current.registrations.length === 0) this.providers.delete(manifest.id)
+      }
+    }
     const stored = { ...registration, manifest }
-    this.providers.set(manifest.id, stored)
+    const entry = { manifest, registrations: [stored] }
+    this.providers.set(manifest.id, entry)
     return () => {
-      if (this.providers.get(manifest.id) === stored) this.providers.delete(manifest.id)
+      const current = this.providers.get(manifest.id)
+      if (current !== entry) return
+      const index = current.registrations.indexOf(stored)
+      if (index >= 0) current.registrations.splice(index, 1)
+      if (current.registrations.length === 0) this.providers.delete(manifest.id)
     }
   }
 
@@ -114,11 +138,13 @@ export class CordisInspectRegistryService extends Service {
     signal: AbortSignal,
   ): Promise<JsonValue> {
     if (platform === 'host') {
-      const registration = this.providers.get(providerId)
-      if (registration === undefined) throw new Error(`Host Cordis inspect provider "${providerId}" is not registered`)
-      const method = findMethod(registration.manifest, methodName)
+      const entry = this.providers.get(providerId)
+      if (entry === undefined) throw new Error(`Host Cordis inspect provider "${providerId}" is not registered`)
+      const method = findMethod(entry.manifest, methodName)
       validateInput('Host', providerId, method, input)
       signal.throwIfAborted()
+      const registration = entry.registrations.at(-1)
+      if (registration === undefined) throw new Error(`Host Cordis inspect provider "${providerId}" is not registered`)
       const data = await registration.query(methodName, input, { agent, signal })
       signal.throwIfAborted()
       return validateOutput('Host', providerId, method, data)
@@ -196,6 +222,10 @@ export class CordisInspectRegistryService extends Service {
       signal.removeEventListener('abort', onAbort)
     }
   }
+}
+
+function sameManifest(left: CordisInspectProviderManifest, right: CordisInspectProviderManifest): boolean {
+  return JSON.stringify(left) === JSON.stringify(right)
 }
 
 function view(platform: CordisInspectPlatform, manifest: CordisInspectProviderManifest): CordisInspectProviderView {
