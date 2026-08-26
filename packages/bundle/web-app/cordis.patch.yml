@@ -100,6 +100,10 @@
     - id: plugin-inventory
       name: '@deepseek-ai/dsh-host-plugin-inventory'
 
+    # Banyan host-side filesystem operations used by workspace migration.
+    - id: banyan-file-ops
+      name: '@blue-soda/dsh-host-banyan-file-ops'
+
     # The API gateway: the transport-agnostic dispatch face every client shape
     # shares. The base layer's agent-default-model service owns the default model.
     - id: api-gateway

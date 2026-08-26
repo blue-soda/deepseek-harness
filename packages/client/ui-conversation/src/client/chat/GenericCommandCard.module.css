@@ -1,11 +1,19 @@
 .root {
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .row {
   position: relative;
+  box-sizing: border-box;
   overflow: hidden;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .root[data-state='running'] .row::after {
@@ -38,6 +46,12 @@
 }
 
 .title {
+  flex: 0 1 auto;
+  min-width: min(4ch, 100%);
+  max-width: min(18ch, calc(100% - 32px));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-weight: 400;
 }
 

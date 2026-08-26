@@ -1320,6 +1320,9 @@ importers:
 
   packages/bundle/web-app:
     dependencies:
+      '@blue-soda/dsh-host-banyan-file-ops':
+        specifier: workspace:^
+        version: link:../../host/banyan-file-ops
       '@deepseek-ai/dsh-agent-presets':
         specifier: workspace:^
         version: link:../../preset/agent-presets
@@ -5014,6 +5017,9 @@ importers:
 
   packages/host/apiproxy:
     dependencies:
+      '@blue-soda/dsh-host-banyan-file-ops':
+        specifier: workspace:^
+        version: link:../banyan-file-ops
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
         version: link:../../core/agent
@@ -5123,6 +5129,12 @@ importers:
       '@deepseek-ai/dsh-typert-registry':
         specifier: workspace:^
         version: link:../../typert/registry
+
+  packages/host/banyan-file-ops:
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
 
   packages/host/directory-picker:
     devDependencies:

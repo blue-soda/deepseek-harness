@@ -231,17 +231,29 @@ function UserStyleBubble({
   const showBubble = text !== '' || rest.length > 0
   return (
     <div className={css.userRow} data-pending-steering={pending || undefined} data-time-hover-root>
-      <div className={css.userStack}>
-        {renderMessageImages({ images, align: 'end' })}
-        {showBubble && <div className={css.bubble}>
-          {projectUserText(text, referenceLabels)}
-          {rest.map((block, i) => <JsonBlock key={i} label={t('message.extraBlock')} payload={block} truncatedLabel={truncated} />)}
-        </div>}
-        {referenceLabels.length > 0 && (
-          <div className={css.referenceSummary}>
-            {t('message.referenceSummary', { labels: referenceLabels.join(t('message.referenceSeparator')) })}
-          </div>
-        )}
+      <div className={css.userLine}>
+        <div className={css.userStack}>
+          {renderMessageImages({ images, align: 'end' })}
+          {showBubble && <div className={css.bubble}>
+            {projectUserText(text, referenceLabels)}
+            {rest.map((block, i) => <JsonBlock key={i} label={t('message.extraBlock')} payload={block} truncatedLabel={truncated} />)}
+          </div>}
+          {referenceLabels.length > 0 && (
+            <div className={css.referenceSummary}>
+              {t('message.referenceSummary', { labels: referenceLabels.join(t('message.referenceSeparator')) })}
+            </div>
+          )}
+        </div>
+        <button
+          type="button"
+          className={css.userIdentityAvatar}
+          aria-label="打开我的信息面板"
+          onClick={() => {
+            window.dispatchEvent(new CustomEvent('banyan:open-detail', { detail: { kind: 'me' } }))
+          }}
+        >
+          我
+        </button>
       </div>
       {actions?.(text)}
     </div>

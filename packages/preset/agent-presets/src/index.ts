@@ -30,7 +30,7 @@ import type {} from '@deepseek-ai/dsh-agent'
 import { settingsNamespace, type SettingsScope, type default as SettingsService } from '@deepseek-ai/dsh-settings'
 import { dshHomePath } from '@deepseek-ai/dsh-home-paths'
 import { discoverPresets, USER_PRESET_DIR } from './discovery.ts'
-import { copyComposition, deleteComposition, readComposition } from './authoring.ts'
+import { copyComposition, deleteComposition, readComposition, writeComposition } from './authoring.ts'
 import { mountPreset, serviceForAgent, standingMountFor } from './mount.ts'
 import { PresetExistsError } from './authoring.ts'
 import { PresetMountError, UnknownPresetError, type AgentPreset, type Config, type PresetRoot } from './preset.ts'
@@ -60,7 +60,7 @@ export {
 } from './mount.ts'
 export {
   copyComposition, deleteComposition, InvalidPresetIdError, PresetExistsError,
-  PresetNotWritableError, readComposition, writableRoot,
+  PresetNotWritableError, readComposition, writableRoot, writeComposition,
 } from './authoring.ts'
 export { resolveSessionPreset, type PresetBearingSession } from './session.ts'
 export { PresetMountError, UnknownPresetError } from './preset.ts'
@@ -360,6 +360,17 @@ export class AgentPresets extends Service {
    */
   async read(id: string): Promise<string> {
     return await readComposition(await this.resolve(id))
+  }
+
+  /**
+   * Replace a locally authored preset's composition text.
+   * @param id - the preset id.
+   * @param content - the exact composition text to write.
+   */
+  async write(id: string, content: string): Promise<void> {
+    const preset = await this.resolve(id)
+    await writeComposition(this.resolvedRoots, preset, content)
+    this.standing.delete(id)
   }
 
   /**

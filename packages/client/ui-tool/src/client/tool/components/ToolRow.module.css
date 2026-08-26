@@ -2,13 +2,21 @@
    [16 leading] gap6 [title 14/24] gap8 [2x2 dot] gap8 [summary FILL truncate]. */
 
 .root {
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .row {
   position: relative; /* sweep-glare overlay anchor */
+  box-sizing: border-box;
   overflow: hidden;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 
 /* Running sweep (deepsuite ShimmerText pattern): a fixed-width glare band —
@@ -61,6 +69,12 @@
 }
 
 .title {
+  flex: 0 1 auto;
+  min-width: min(4ch, 100%);
+  max-width: min(18ch, calc(100% - 32px));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-weight: 400;
 }
 

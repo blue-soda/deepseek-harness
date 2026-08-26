@@ -64,6 +64,23 @@ export const hostCreateDirectoryRequestSchema = z.object({
 export const hostCreateDirectoryValueSchema = z.object({
   path: z.string(),
 }) satisfies z.ZodType<Wire<ResponseValue<'host.createDirectory'>>>
+
+/** host.copyDirectory request payload. */
+export const hostCopyDirectoryRequestSchema = z.object({
+  sourcePath: z.string().min(1),
+  targetPath: z.string().min(1),
+  overwrite: z.boolean().optional(),
+  skipNames: z.array(z.string().min(1)).optional(),
+}) satisfies z.ZodType<Wire<RequestPayload<'host.copyDirectory'>>>
+
+/** host.copyDirectory response value. */
+export const hostCopyDirectoryValueSchema = z.object({
+  sourcePath: z.string(),
+  targetPath: z.string(),
+  copiedFiles: z.number().int().nonnegative(),
+  copiedDirectories: z.number().int().nonnegative(),
+  skippedEntries: z.number().int().nonnegative(),
+}) satisfies z.ZodType<Wire<ResponseValue<'host.copyDirectory'>>>
 /** host.openPath request payload. */
 export const hostOpenPathRequestSchema = z.object({
   path: z.string().min(1),

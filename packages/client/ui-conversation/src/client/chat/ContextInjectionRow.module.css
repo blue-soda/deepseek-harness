@@ -1,6 +1,9 @@
 /* Figma 10:2482: 24px Tool calls header, 4px gap, 141px code block cap. */
 
 .root {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
   min-width: 0;
 }
 
@@ -24,8 +27,9 @@
 }
 
 .source {
-  flex: none;
+  flex: 0 1 auto;
   min-width: 0;
+  max-width: min(28ch, calc(100% - 48px));
   overflow: hidden;
   color: var(--dsw-alias-label-tertiary);
   font-size: 14px;

@@ -4,8 +4,12 @@
 /* Summary line over the terminal card; the summary row keeps its own 24px
    height, so the card is a column around it rather than a change to it. */
 .card {
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 
 /* Expanded terminal card, matching ToolRow's terminalBody: 4px indent, l1
@@ -86,9 +90,12 @@
 
 .root {
   position: relative; /* sweep-glare overlay anchor */
+  box-sizing: border-box;
   overflow: hidden;
   display: flex;
   align-items: center;
+  width: 100%;
+  max-width: 100%;
   height: 24px;
   min-width: 0;
 }
@@ -157,7 +164,12 @@
 }
 
 .title {
-  flex: none;
+  flex: 0 1 auto;
+  min-width: min(4ch, 100%);
+  max-width: min(18ch, calc(100% - 32px));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 14px;
   line-height: 24px;
   color: var(--dsw-alias-label-secondary);

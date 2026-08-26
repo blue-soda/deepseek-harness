@@ -100,6 +100,7 @@ import type {
 } from '@deepseek-ai/dsh-user-questions'
 import { UserQuestionError } from '@deepseek-ai/dsh-user-questions'
 import { DirectoryPickerError } from '@deepseek-ai/dsh-host-directory-picker'
+import { BanyanFileOpsError } from '@blue-soda/dsh-host-banyan-file-ops'
 import {
   ApiRemoteSessionNotFound as SessionNotFound,
   ApiRemoteSubagentSessionOwnership as SubagentSessionOwnership,
@@ -2906,6 +2907,46 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
         }
       },
 
+      async copyDirectory(request, signal) {
+        const fileOps = ctx.get('banyanFileOps')
+        if (fileOps === undefined) {
+          return err(request, {
+            code: 'directory-copy-failed',
+            message: 'Banyan host file operations plugin is not mounted',
+            details: {
+              sourcePath: request.payload.sourcePath,
+              targetPath: request.payload.targetPath,
+            },
+          })
+        }
+        try {
+          return ok(request, await fileOps.copyDirectory({
+            sourcePath: request.payload.sourcePath,
+            targetPath: request.payload.targetPath,
+            overwrite: request.payload.overwrite === true,
+            ...request.payload.skipNames === undefined ? {} : { skipNames: request.payload.skipNames },
+            signal,
+          }))
+        } catch (error: unknown) {
+          if (signal.aborted) return err(request, { code: 'cancelled', message: 'directory copy was aborted', details: {} })
+          if (error instanceof BanyanFileOpsError) {
+            return err(request, {
+              code: 'directory-copy-failed',
+              message: error.message,
+              details: { sourcePath: error.sourcePath, targetPath: error.targetPath },
+            })
+          }
+          return err(request, {
+            code: 'directory-copy-failed',
+            message: `failed to copy "${request.payload.sourcePath}" to "${request.payload.targetPath}": ${error instanceof Error ? error.message : String(error)}`,
+            details: {
+              sourcePath: request.payload.sourcePath,
+              targetPath: request.payload.targetPath,
+            },
+          })
+        }
+      },
+
       async openPath(request, signal) {
         return openPath(request, request.payload.path, signal)
       },
@@ -3050,6 +3091,18 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
             ...preset.name === undefined ? {} : { name: preset.name },
             ...preset.description === undefined ? {} : { description: preset.description },
           })
+        } catch (error: unknown) {
+          return err(request, presetError(agentPreset, error))
+        }
+      },
+
+      async write(request) {
+        const { agentPreset, content } = request.payload
+        const presets = ctx.get('agentPresets')
+        if (presets === undefined) return err(request, noRoster(agentPreset))
+        try {
+          await (presets as typeof presets & { write(id: string, content: string): Promise<void> }).write(agentPreset, content)
+          return ok(request, { agentPreset })
         } catch (error: unknown) {
           return err(request, presetError(agentPreset, error))
         }

@@ -15,9 +15,13 @@ type RoutedChatNodeOwner = {
   [Kind in ChatNode['kind']]: ChatNodeOwnerProps & { readonly node: ChatNode<Kind> }
 }[ChatNode['kind']]
 
+function centerInTranscript(node: ChatNode): boolean {
+  return node.kind !== 'assistant-step' && node.kind !== 'user' && node.kind !== 'steering'
+}
+
 /** Subscribe and dispatch one stable Context key without observing sibling Nodes. */
 export const ChatNodeSeat = memo(function ChatNodeSeat({
-  nodeKey, selectedCallId, cwd, openFile, inspectCall, forkAt,
+  nodeKey, showAssistantAvatar, selectedCallId, cwd, openFile, inspectCall, forkAt,
   renderMessageImages, fileMentions, useSession, renderSlot, t,
 }: ChatNodeSeatProps) {
   const node = useSession(snapshot => snapshot.chat.nodes.get(nodeKey))
@@ -25,6 +29,7 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
   const owner = useMemo<ChatNodeOwnerProps | null>(() => node === undefined
     ? null
     : {
+      showAssistantAvatar,
       selectedCallId,
       cwd,
       openFile,
@@ -33,13 +38,24 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
       renderMessageImages,
       fileMentions,
     }, [
-    node, selectedCallId, cwd, openFile, inspectCall, forkAt, renderMessageImages, fileMentions,
+    node, showAssistantAvatar, selectedCallId, cwd, openFile, inspectCall, forkAt, renderMessageImages, fileMentions,
   ])
   if (routedNode === undefined || owner === null) return null
   // Runtime dispatch owns the correlation: every Node's discriminant is the
   // keyed-slot entry passed alongside that same Node. TypeScript does not
   // distribute an object containing a union into a union of objects itself.
   const routedOwner = { ...owner, node: routedNode } as RoutedChatNodeOwner
+  const rendered = renderSlot('conversation.chat.node', routedOwner, {
+    entryKey: routedNode.kind,
+    hookContext: nodeKey,
+    fallback: (
+      <JsonBlock
+        label={t('message.unknownSurface', { type: routedNode.kind })}
+        payload={routedNode.data}
+        truncatedLabel={total => t('json.truncated', { total })}
+      />
+    ),
+  })
   return (
     <div
       className={css.flowItem}
@@ -47,17 +63,13 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
       data-chat-flow-key={routedNode.key}
       data-chat-flow-kind={routedNode.kind}
     >
-      {renderSlot('conversation.chat.node', routedOwner, {
-        entryKey: routedNode.kind,
-        hookContext: nodeKey,
-        fallback: (
-          <JsonBlock
-            label={t('message.unknownSurface', { type: routedNode.kind })}
-            payload={routedNode.data}
-            truncatedLabel={total => t('json.truncated', { total })}
-          />
-        ),
-      })}
+      {centerInTranscript(routedNode)
+        ? (
+          <div className={css.processLine} data-chat-process-line="">
+            <div className={css.processBody}>{rendered}</div>
+          </div>
+        )
+        : rendered}
     </div>
   )
 })

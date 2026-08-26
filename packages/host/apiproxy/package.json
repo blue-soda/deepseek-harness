@@ -45,6 +45,7 @@
   ],
   "license": "MIT",
   "dependencies": {
+    "@blue-soda/dsh-host-banyan-file-ops": "workspace:^",
     "@deepseek-ai/dsh-attachment": "workspace:^",
     "@deepseek-ai/dsh-agent": "workspace:^",
     "@deepseek-ai/dsh-agent-default-model": "workspace:^",

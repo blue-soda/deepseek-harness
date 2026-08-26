@@ -443,6 +443,21 @@ describe('ChatView', () => {
         'fixture:user:1', 'fixture:assistant:2',
         'fixture:tool:a', 'call:a', 'fixture:tool:b', 'call:b',
       ])
+    expect(view.container.querySelectorAll('[data-chat-process-line]')).toHaveLength(2)
+  })
+
+  it('reserves the transcript gutters for tool rows and gives each assistant turn one visible avatar', () => {
+    const first = assistant(2, 'first model words', 1)
+    const second = assistant(4, 'second model words', 1)
+    const h = makeHarness({
+      nodes: [user(1, 'do the thing'), first, toolResult(3, 'a', 'pwsh'), second],
+    })
+    const view = render(<h.ChatView {...h.props} />)
+
+    const toolRow = view.container.querySelector('[data-chat-flow-kind="tool-call"]')
+    expect(toolRow?.querySelector('[data-chat-process-line]')).not.toBeNull()
+    const visibleAssistantAvatars = view.container.querySelectorAll('[data-assistant-avatar]:not([data-hidden])')
+    expect(visibleAssistantAvatars).toHaveLength(1)
   })
 
   it('renders Host-pending steering at the flow tail and hands off to the durable node', () => {

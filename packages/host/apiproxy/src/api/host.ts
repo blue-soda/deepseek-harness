@@ -32,6 +32,15 @@ export interface DirectoryListing {
   truncated: boolean
 }
 
+/** host.copyDirectory response counters. */
+export interface DirectoryCopyResult {
+  sourcePath: string
+  targetPath: string
+  copiedFiles: number
+  copiedDirectories: number
+  skippedEntries: number
+}
+
 /** Host-level unary methods. */
 export interface HostApi {
   /**
@@ -84,6 +93,22 @@ export interface HostApi {
   createDirectory(
     request: RpcRequest<{ path: string; name: string }>,
   ): Promise<RpcResponse<{ path: string }>>
+
+  /**
+   * Copy one directory tree on the Host filesystem. This is intentionally
+   * host-scoped instead of workspace-registry-scoped: a Workspace record only
+   * adopts an existing path, while this method prepares a replacement path
+   * before the client switches future sessions to it.
+   */
+  copyDirectory(
+    request: RpcRequest<{
+      sourcePath: string
+      targetPath: string
+      overwrite?: boolean
+      skipNames?: string[]
+    }>,
+    signal: AbortSignal,
+  ): Promise<RpcResponse<DirectoryCopyResult>>
 
   /**
    * Open a filesystem path with the operating system's default application

@@ -55,6 +55,17 @@ export const agentPresetReadValueSchema = z.object({
   description: z.string().optional(),
 }) satisfies z.ZodType<Wire<ResponseValue<'agentPreset.read'>>>
 
+/** agentPreset.write request payload. */
+export const agentPresetWriteRequestSchema = z.object({
+  agentPreset: z.string().min(1),
+  content: z.string(),
+}) satisfies z.ZodType<Wire<RequestPayload<'agentPreset.write'>>>
+
+/** agentPreset.write response value. */
+export const agentPresetWriteValueSchema = z.object({
+  agentPreset: z.string(),
+}) satisfies z.ZodType<Wire<ResponseValue<'agentPreset.write'>>>
+
 /** agentPreset.copy request payload. */
 export const agentPresetCopyRequestSchema = z.object({
   from: z.string().min(1),

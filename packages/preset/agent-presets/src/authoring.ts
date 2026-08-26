@@ -79,6 +79,27 @@ export async function readComposition(preset: AgentPreset): Promise<string> {
   return await readFile(preset.path, 'utf8')
 }
 
+/**
+ * Replace the composition file of a locally authored preset.
+ * @param roots - the configured roots.
+ * @param preset - the resolved preset to update.
+ * @param content - the exact composition text to store.
+ */
+export async function writeComposition(
+  roots: readonly PresetRoot[],
+  preset: AgentPreset,
+  content: string,
+): Promise<void> {
+  if (preset.trust !== 'user') {
+    throw new PresetNotWritableError(preset.id, 'it ships with the deployment')
+  }
+  const dir = join(writableRoot(roots), preset.id)
+  if (!isAbsolute(preset.path) || !preset.path.startsWith(dir)) {
+    throw new PresetNotWritableError(preset.id, 'it does not live under the writable preset root')
+  }
+  await writeFileAtomic(preset.path, content, { mode: 0o600, dirMode: 0o700 })
+}
+
 /** Whether anything occupies the path (cp's own errorOnExist backstops races). */
 async function occupied(path: string): Promise<boolean> {
   let present = true

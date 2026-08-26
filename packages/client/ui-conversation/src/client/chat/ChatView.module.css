@@ -52,7 +52,35 @@
 /* Settled-flow identity boundary. It is neutral today and becomes the natural
    measurement/mount unit for a virtualizer without changing the column gap. */
 .flowItem {
+  width: 100%;
+  max-width: 100%;
   min-width: 0;
+}
+
+.processLine {
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) 38px;
+  align-items: start;
+  gap: 10px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.processBody {
+  box-sizing: border-box;
+  grid-column: 2;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+}
+
+.processBody > * {
+  box-sizing: border-box;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
 }
 
 /* A keyed renderer may intentionally decline its row after dispatch (the
@@ -63,7 +91,12 @@
 }
 
 .callRow {
+  box-sizing: border-box;
   border-radius: 6px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
 }
 
 /* Selection still sets data-selected for details linkage; no outline —

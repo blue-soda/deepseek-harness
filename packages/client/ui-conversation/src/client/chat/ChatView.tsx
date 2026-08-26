@@ -115,6 +115,15 @@ function runningTurnStartTime(timeline: ConversationTimelineSnapshot): number | 
   return latest
 }
 
+function assistantNodeHasVisibleContent(node: ReturnType<ConversationTimelineSnapshot['chat']['nodes']['get']>): boolean {
+  if (node?.kind !== 'assistant-step') return false
+  return node.data.blocks.some((block) => {
+    if (block.kind === 'tool-call') return false
+    if ('text' in block && typeof block.text === 'string') return block.text.trim() !== ''
+    return true
+  })
+}
+
 /** Turn-level model activity label retained across first-token, tool, and streaming phases. */
 function TurnStatus({ startTime, t }: {
   /** The running turn's logged `turn/start` time; null falls back to mount
@@ -240,6 +249,19 @@ export function ChatView({
   const lastNode = lastKey === null ? undefined : nodeStore.get(lastKey)
   const lastSteeringId = pendingSteering[pendingSteering.length - 1]?.id ?? null
   const followSig = `${openState}:${firstSeq}:${lastKey}:${order.length}:${running ? 1 : 0}:${lastSteeringId ?? ''}`
+  const firstAssistantByTurn = useMemo(() => {
+    const seen = new Set<number>()
+    const first = new Set<string>()
+    for (const key of order) {
+      const node = nodeStore.get(key)
+      if (!assistantNodeHasVisibleContent(node)) continue
+      const turn = node.data.turn
+      if (seen.has(turn)) continue
+      seen.add(turn)
+      first.add(key)
+    }
+    return first
+  }, [nodeStore, order])
 
   const toBottom = (el: HTMLElement): void => {
     anchorRef.current = null
@@ -433,6 +455,7 @@ export function ChatView({
             <ChatNodeSeat
               key={nodeKey}
               nodeKey={nodeKey}
+              showAssistantAvatar={firstAssistantByTurn.has(nodeKey)}
               useSession={useSession}
               selectedCallId={selectedCallId}
               cwd={cwd}

@@ -86,6 +86,10 @@ export interface AgentPresetsApi {
     description?: string
   }>>
 
+  /** Replace one locally authored preset's composition text. Shipped presets are refused. */
+  write(request: RpcRequest<{ agentPreset: string; content: string }>):
+  Promise<RpcResponse<{ agentPreset: string }>>
+
   /**
    * Create a locally authored preset by copying an existing one whole.
    *

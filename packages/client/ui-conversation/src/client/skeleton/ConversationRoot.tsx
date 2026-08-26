@@ -85,15 +85,15 @@ export function ConversationRoot({
   //   1. a just-picked workspace (pending) → its title;
   //   2. cold start, no session yet → placeholder ("Choose workspace");
   //   3. the blank session's workspace is in the list → its title;
-  //   4. list still loading → cwd folder name bridges so the title does not
-  //      flash on refresh (empty cwd → placeholder);
-  //   5. list ready but no owning workspace (deleted from the sidebar) →
-  //      placeholder, never the deleted folder's name via cwd.
+  //   4. cwd folder name bridges when an embedding shell has already assigned
+  //      a default workspace but the Workspace registry has not grouped the
+  //      session yet;
+  //   5. empty cwd → placeholder.
   const chipTitle = pendingWorkspace?.title
     ?? (sessionId === undefined
       ? undefined
       : sessionWorkspace?.title
-        ?? (workspaces.phase === 'ready' || cwd === undefined || cwd === ''
+        ?? (cwd === undefined || cwd === ''
           ? undefined
           : workspaceLabel(cwd)))
 

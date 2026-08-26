@@ -1,12 +1,20 @@
 .callRow {
+  box-sizing: border-box;
   border-radius: 6px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .subCalls {
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: 4px;
   margin: 4px 0 2px 22px;
   padding-left: 8px;
+  max-width: calc(100% - 22px);
+  min-width: 0;
   border-left: 1px solid var(--dsw-alias-border-l2);
 }

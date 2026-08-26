@@ -414,6 +414,8 @@ export interface ChatNodeTurnDataInjected {
 
 /** Stable owner currency delivered to one keyed Chat business renderer. */
 export interface ChatNodeOwnerProps {
+  /** True when this Assistant node should own the visible avatar for its turn. */
+  showAssistantAvatar?: boolean | undefined
   /** Selected Tool call, when the shared details store names one. */
   selectedCallId?: CallId | undefined
   /** Session workspace root; Tool summaries display paths relative to it. */

@@ -2821,6 +2821,19 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
           content: preset.content,
         })
       },
+      write: (request) => {
+        const { agentPreset, content } = request.payload
+        const preset = fixturePresets.get(agentPreset)
+        if (preset === undefined || preset.trust === 'system') {
+          return err(request, {
+            code: 'agent-preset-read-only',
+            message: `agent preset "${agentPreset}" cannot be written`,
+            details: { agentPreset, reason: preset === undefined ? 'unknown preset' : 'it ships with the deployment' },
+          })
+        }
+        fixturePresets.set(agentPreset, { ...preset, content })
+        return ok(request, { agentPreset })
+      },
       copy: (request) => {
         const { from, agentPreset } = request.payload
         const source = fixturePresets.get(from)
@@ -3207,6 +3220,7 @@ export class FixtureApiClient extends AbstractApiClient {
       case 'agentPreset.list': return this.api.agentPresets.list(request)
       case 'agentPreset.select': return this.api.agentPresets.select(request)
       case 'agentPreset.read': return this.api.agentPresets.read(request)
+      case 'agentPreset.write': return this.api.agentPresets.write(request)
       case 'agentPreset.copy': return this.api.agentPresets.copy(request)
       case 'agentPreset.openDocument': return this.api.agentPresets.openDocument(request, new AbortController().signal)
       case 'agentPreset.remove': return this.api.agentPresets.remove(request)
