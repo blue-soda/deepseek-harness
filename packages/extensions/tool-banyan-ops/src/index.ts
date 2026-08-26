@@ -43,6 +43,8 @@ export interface Config {
   readonly rebuildContentCounters?: boolean
   /** Register bounded denormalized content reaction counter rebuild action for published content. */
   readonly rebuildPublishedContentCounters?: boolean
+  /** Register Redis public feed projection rebuild action. */
+  readonly rebuildPublicFeed?: boolean
   /** Register Elasticsearch content reindex action. */
   readonly reindexContent?: boolean
   /** Register Elasticsearch content index ensure action. */
@@ -73,6 +75,7 @@ export const Config: z<Config> = z.object({
   warmContentCache: z.boolean().default(true),
   rebuildContentCounters: z.boolean().default(true),
   rebuildPublishedContentCounters: z.boolean().default(true),
+  rebuildPublicFeed: z.boolean().default(true),
   reindexContent: z.boolean().default(true),
   ensureContentIndex: z.boolean().default(true),
   reindexPublishedContent: z.boolean().default(true),
@@ -96,6 +99,7 @@ interface ResolvedConfig {
   readonly warmContentCache: boolean
   readonly rebuildContentCounters: boolean
   readonly rebuildPublishedContentCounters: boolean
+  readonly rebuildPublicFeed: boolean
   readonly reindexContent: boolean
   readonly ensureContentIndex: boolean
   readonly reindexPublishedContent: boolean
@@ -132,6 +136,7 @@ const PROMPT_TEXT =
   + 'banyan_ops_status is read-only and should be called before maintenance; banyan_ops_audit_recent shows who recently ran maintenance actions. '
   + 'banyan_content_search searches public/friend/self content through the server search layer, backed by Elasticsearch when enabled. '
   + 'Use banyan_content_cache_evict or banyan_content_cache_warm for stale content details, banyan_content_counters_rebuild for stale denormalized like/favorite counts, banyan_reaction_cache_rebuild for one stale Redis reaction bitmap, banyan_reaction_cache_rebuild_published after Redis cache loss, and banyan_content_reindex only when a content item is missing or stale in Elasticsearch. '
+  + 'Use banyan_content_feed_rebuild_public when the public sharing feed is empty or out of order after Redis loss or projection outages. '
   + 'Use banyan_content_index_ensure before Elasticsearch maintenance if the content index may be missing, and banyan_content_reindex_published to rebuild a bounded page of published content. '
   + 'Use banyan_upload_cleanup to abandon expired pending upload objects and free stale local object files. '
   + 'Use banyan_outbox_failed_recent when ops status reports failed outbox projections, banyan_outbox_retry_failed to retry those failures, and banyan_outbox_replay to replay stored outbox events after broader consumer outages or local test resets. '
@@ -155,6 +160,7 @@ export function apply(ctx: Context, config: Config): void {
   if (resolved.warmContentCache) registerContentCacheWarm(ctx, resolved)
   if (resolved.rebuildContentCounters) registerContentCountersRebuild(ctx, resolved)
   if (resolved.rebuildPublishedContentCounters) registerPublishedContentCountersRebuild(ctx, resolved)
+  if (resolved.rebuildPublicFeed) registerPublicFeedRebuild(ctx, resolved)
   if (resolved.reindexContent) registerContentReindex(ctx, resolved)
   if (resolved.ensureContentIndex) registerContentIndexEnsure(ctx, resolved)
   if (resolved.reindexPublishedContent) registerPublishedContentReindex(ctx, resolved)
@@ -355,6 +361,31 @@ function registerPublishedContentCountersRebuild(ctx: Context, config: ResolvedC
       }))
     },
     presentCall: args => ({ card: 'generic', title: 'Rebuild published Banyan content counters', kind: 'edit', rawInput: args }),
+  }))
+}
+
+function registerPublicFeedRebuild(ctx: Context, config: ResolvedConfig): void {
+  ctx.tools.register(defineTool({
+    name: 'banyan_content_feed_rebuild_public',
+    description: 'Rebuild the Redis public Banyan content feed projection from published public database rows. Use when the sharing feed is empty, missing recent public content, or out of order after Redis loss or projection outages.',
+    parameters: {
+      kind: { type: 'string', enum: ['POST', 'DSH_SKILL'], description: 'Optional content kind to rebuild. Omit to rebuild all public feed kinds.' },
+      limit: { type: 'integer', description: 'Maximum published content rows to scan. Defaults to 500, maximum enforced by Banyan Server.' },
+    },
+    output: TEXT_OUTPUT,
+    timeoutMs: config.timeoutMs,
+    execute: async (args) => {
+      const query = args as Record<string, unknown>
+      return formatHttpResult(await requestJson(config, {
+        method: 'POST',
+        path: '/ops/feed/public/rebuild',
+        query: {
+          kind: typeof query.kind === 'string' ? query.kind : undefined,
+          limit: readLimit(query.limit, 500),
+        },
+      }))
+    },
+    presentCall: args => ({ card: 'generic', title: 'Rebuild Banyan public feed', kind: 'edit', rawInput: args }),
   }))
 }
 
@@ -604,6 +635,7 @@ function resolveConfig(config: Config): ResolvedConfig {
     warmContentCache: config.warmContentCache ?? true,
     rebuildContentCounters: config.rebuildContentCounters ?? true,
     rebuildPublishedContentCounters: config.rebuildPublishedContentCounters ?? true,
+    rebuildPublicFeed: config.rebuildPublicFeed ?? true,
     reindexContent: config.reindexContent ?? true,
     ensureContentIndex: config.ensureContentIndex ?? true,
     reindexPublishedContent: config.reindexPublishedContent ?? true,
