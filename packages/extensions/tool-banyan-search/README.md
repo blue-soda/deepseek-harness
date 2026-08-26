@@ -12,6 +12,10 @@ outbox replay, or Elasticsearch reindex.
 - `banyan_content_search`: search Banyan shared posts and DSH skill shares.
 - `banyan_content_get`: fetch one visible content item with full Markdown body
   and attachment metadata.
+- `banyan_knowledge_search`: search visible Banyan knowledge chunks for
+  Agentic RAG.
+- `banyan_knowledge_get`: fetch one visible knowledge document with full
+  Markdown body.
 
 ## Configuration
 

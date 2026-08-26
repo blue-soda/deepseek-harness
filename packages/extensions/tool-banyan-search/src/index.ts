@@ -29,6 +29,10 @@ export interface Config {
   readonly contentSearch?: boolean
   /** Register single content retrieval. */
   readonly contentGet?: boolean
+  /** Register knowledge chunk search. */
+  readonly knowledgeSearch?: boolean
+  /** Register single knowledge document retrieval. */
+  readonly knowledgeGet?: boolean
 }
 
 export const Config: z<Config> = z.object({
@@ -38,6 +42,8 @@ export const Config: z<Config> = z.object({
   timeoutMs: z.number().step(1).min(1).default(10_000),
   contentSearch: z.boolean().default(true),
   contentGet: z.boolean().default(true),
+  knowledgeSearch: z.boolean().default(true),
+  knowledgeGet: z.boolean().default(true),
 })
 
 interface ResolvedConfig {
@@ -47,6 +53,8 @@ interface ResolvedConfig {
   readonly timeoutMs: number
   readonly contentSearch: boolean
   readonly contentGet: boolean
+  readonly knowledgeSearch: boolean
+  readonly knowledgeGet: boolean
 }
 
 interface RequestOptions {
@@ -73,6 +81,7 @@ const TEXT_OUTPUT = {
 const PROMPT_TEXT =
   'Use Banyan search tools as a read-only Agentic RAG source for Banyan posts and shared DSH skills. '
   + 'Call banyan_content_search first to find candidate items, then banyan_content_get when the full Markdown body or attachments are needed. '
+  + 'Call banyan_knowledge_search for personal/team knowledge snippets, then banyan_knowledge_get if the original Markdown document is needed. '
   + 'Respect each result visibility and cite content titles or authors when using retrieved information. '
   + 'These tools do not mutate Banyan Server and do not provide backend maintenance permissions.'
 
@@ -87,6 +96,8 @@ export function apply(ctx: Context, config: Config): void {
 
   if (resolved.contentSearch) registerContentSearch(ctx, resolved)
   if (resolved.contentGet) registerContentGet(ctx, resolved)
+  if (resolved.knowledgeSearch) registerKnowledgeSearch(ctx, resolved)
+  if (resolved.knowledgeGet) registerKnowledgeGet(ctx, resolved)
 }
 
 function registerContentSearch(ctx: Context, config: ResolvedConfig): void {
@@ -134,6 +145,52 @@ function registerContentGet(ctx: Context, config: ResolvedConfig): void {
       path: `/contents/${encodeURIComponent(requireString(args, 'contentId'))}`,
     })),
     presentCall: args => ({ card: 'generic', title: 'Read Banyan content', kind: 'read', rawInput: args }),
+  }))
+}
+
+function registerKnowledgeSearch(ctx: Context, config: ResolvedConfig): void {
+  ctx.tools.register(defineTool({
+    name: 'banyan_knowledge_search',
+    description: 'Search visible Banyan knowledge chunks through the server knowledge API. Use this for Agentic RAG over personal or team Markdown knowledge before answering project, document, or workflow questions.',
+    parameters: {
+      q: { type: 'string', description: 'Search query. Empty string returns recent visible knowledge chunks.' },
+      workspaceId: { type: 'string', description: 'Optional Banyan workspace ID.' },
+      scope: { type: 'string', enum: ['public', 'workspace', 'self'], description: 'Visibility scope. Defaults to workspace.' },
+      limit: { type: 'integer', description: 'Result limit. Defaults to 10, maximum enforced by Banyan Server.' },
+    },
+    output: TEXT_OUTPUT,
+    timeoutMs: config.timeoutMs,
+    isConcurrencySafe: () => true,
+    execute: async (args) => {
+      const query = args as Record<string, unknown>
+      return formatHttpResult(await requestJson(config, {
+        path: '/knowledge/search',
+        query: {
+          q: typeof query.q === 'string' ? query.q : '',
+          workspaceId: typeof query.workspaceId === 'string' ? query.workspaceId : undefined,
+          scope: typeof query.scope === 'string' ? query.scope : 'workspace',
+          limit: readLimit(query.limit),
+        },
+      }))
+    },
+    presentCall: args => ({ card: 'generic', title: 'Search Banyan knowledge', kind: 'read', rawInput: args }),
+  }))
+}
+
+function registerKnowledgeGet(ctx: Context, config: ResolvedConfig): void {
+  ctx.tools.register(defineTool({
+    name: 'banyan_knowledge_get',
+    description: 'Fetch one visible Banyan knowledge document by ID, including the full Markdown body and chunk count. Use after banyan_knowledge_search identifies a relevant document.',
+    parameters: {
+      documentId: { type: 'string', required: true, description: 'Banyan knowledge document ID.' },
+    },
+    output: TEXT_OUTPUT,
+    timeoutMs: config.timeoutMs,
+    isConcurrencySafe: () => true,
+    execute: async args => formatHttpResult(await requestJson(config, {
+      path: `/knowledge/documents/${encodeURIComponent(requireString(args, 'documentId'))}`,
+    })),
+    presentCall: args => ({ card: 'generic', title: 'Read Banyan knowledge', kind: 'read', rawInput: args }),
   }))
 }
 
@@ -222,5 +279,7 @@ function resolveConfig(config: Config): ResolvedConfig {
     timeoutMs,
     contentSearch: config.contentSearch ?? true,
     contentGet: config.contentGet ?? true,
+    knowledgeSearch: config.knowledgeSearch ?? true,
+    knowledgeGet: config.knowledgeGet ?? true,
   }
 }
