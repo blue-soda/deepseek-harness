@@ -9,7 +9,10 @@ authorization, audit, and recovery behavior owned by the backend.
 ## Tools
 
 - `banyan_ops_status`: read entity counts and infrastructure status.
+- `banyan_ops_audit_recent`: read recent audited maintenance actions.
 - `banyan_content_search`: search shared content through Banyan Search.
+- `banyan_content_cache_evict`: evict one content detail cache entry.
+- `banyan_content_cache_warm`: rebuild one content detail cache entry from the database.
 - `banyan_reaction_cache_rebuild`: rebuild Redis reaction counters for one content item.
 - `banyan_reaction_cache_rebuild_published`: rebuild Redis reaction counters for a bounded page of published content.
 - `banyan_content_reindex`: reindex one content item into Elasticsearch.

@@ -27,12 +27,18 @@ export interface Config {
   readonly timeoutMs?: number
   /** Register read-only server status. */
   readonly status?: boolean
+  /** Register read-only recent operations audit log. */
+  readonly auditRecent?: boolean
   /** Register content search over Banyan Server search API. */
   readonly contentSearch?: boolean
   /** Register Redis reaction cache rebuild action. */
   readonly rebuildReactionCache?: boolean
   /** Register bounded Redis reaction cache rebuild action for published content. */
   readonly rebuildPublishedReactionCaches?: boolean
+  /** Register Redis content detail cache eviction action. */
+  readonly evictContentCache?: boolean
+  /** Register Redis content detail cache warm action. */
+  readonly warmContentCache?: boolean
   /** Register Elasticsearch content reindex action. */
   readonly reindexContent?: boolean
   /** Register Elasticsearch content index ensure action. */
@@ -53,9 +59,12 @@ export const Config: z<Config> = z.object({
   authTokenEnv: z.string().default('BANYAN_API_TOKEN'),
   timeoutMs: z.number().step(1).min(1).default(10_000),
   status: z.boolean().default(true),
+  auditRecent: z.boolean().default(true),
   contentSearch: z.boolean().default(true),
   rebuildReactionCache: z.boolean().default(true),
   rebuildPublishedReactionCaches: z.boolean().default(true),
+  evictContentCache: z.boolean().default(true),
+  warmContentCache: z.boolean().default(true),
   reindexContent: z.boolean().default(true),
   ensureContentIndex: z.boolean().default(true),
   reindexPublishedContent: z.boolean().default(true),
@@ -70,9 +79,12 @@ interface ResolvedConfig {
   readonly authTokenEnv: string
   readonly timeoutMs: number
   readonly status: boolean
+  readonly auditRecent: boolean
   readonly contentSearch: boolean
   readonly rebuildReactionCache: boolean
   readonly rebuildPublishedReactionCaches: boolean
+  readonly evictContentCache: boolean
+  readonly warmContentCache: boolean
   readonly reindexContent: boolean
   readonly ensureContentIndex: boolean
   readonly reindexPublishedContent: boolean
@@ -105,9 +117,9 @@ const TEXT_OUTPUT = {
 
 const PROMPT_TEXT =
   'Use Banyan ops tools to inspect and repair the Banyan backend through its audited HTTP API. '
-  + 'banyan_ops_status is read-only and should be called before maintenance. '
+  + 'banyan_ops_status is read-only and should be called before maintenance; banyan_ops_audit_recent shows who recently ran maintenance actions. '
   + 'banyan_content_search searches public/friend/self content through the server search layer, backed by Elasticsearch when enabled. '
-  + 'Use banyan_reaction_cache_rebuild for one stale content item, banyan_reaction_cache_rebuild_published after Redis cache loss, and banyan_content_reindex only when a content item is missing or stale in Elasticsearch. '
+  + 'Use banyan_content_cache_evict or banyan_content_cache_warm for stale content details, banyan_reaction_cache_rebuild for one stale content item, banyan_reaction_cache_rebuild_published after Redis cache loss, and banyan_content_reindex only when a content item is missing or stale in Elasticsearch. '
   + 'Use banyan_content_index_ensure before Elasticsearch maintenance if the content index may be missing, and banyan_content_reindex_published to rebuild a bounded page of published content. '
   + 'Use banyan_upload_cleanup to abandon expired pending upload objects and free stale local object files. '
   + 'Use banyan_outbox_retry_failed when ops status reports failed outbox projections, and banyan_outbox_replay to replay stored outbox events after broader consumer outages or local test resets. '
@@ -123,15 +135,41 @@ export function apply(ctx: Context, config: Config): void {
   })
 
   if (resolved.status) registerOpsStatus(ctx, resolved)
+  if (resolved.auditRecent) registerOpsAuditRecent(ctx, resolved)
   if (resolved.contentSearch) registerContentSearch(ctx, resolved)
   if (resolved.rebuildReactionCache) registerReactionCacheRebuild(ctx, resolved)
   if (resolved.rebuildPublishedReactionCaches) registerPublishedReactionCacheRebuild(ctx, resolved)
+  if (resolved.evictContentCache) registerContentCacheEvict(ctx, resolved)
+  if (resolved.warmContentCache) registerContentCacheWarm(ctx, resolved)
   if (resolved.reindexContent) registerContentReindex(ctx, resolved)
   if (resolved.ensureContentIndex) registerContentIndexEnsure(ctx, resolved)
   if (resolved.reindexPublishedContent) registerPublishedContentReindex(ctx, resolved)
   if (resolved.cleanupExpiredUploads) registerUploadCleanup(ctx, resolved)
   if (resolved.replayOutbox) registerOutboxReplay(ctx, resolved)
   if (resolved.retryFailedOutbox) registerOutboxRetryFailed(ctx, resolved)
+}
+
+function registerOpsAuditRecent(ctx: Context, config: ResolvedConfig): void {
+  ctx.tools.register(defineTool({
+    name: 'banyan_ops_audit_recent',
+    description: 'Read recent Banyan Server operations audit log entries. Use before or after maintenance to explain what changed, who requested it, and whether it was accepted.',
+    parameters: {
+      limit: { type: 'integer', description: 'Maximum audit rows to return. Defaults to 50, maximum enforced by Banyan Server.' },
+    },
+    output: TEXT_OUTPUT,
+    timeoutMs: config.timeoutMs,
+    isConcurrencySafe: () => true,
+    execute: async (args) => {
+      const query = args as Record<string, unknown>
+      return formatHttpResult(await requestJson(config, {
+        path: '/ops/audit/recent',
+        query: {
+          limit: readLimit(query.limit, 50),
+        },
+      }))
+    },
+    presentCall: args => ({ card: 'generic', title: 'Read Banyan ops audit log', kind: 'read', rawInput: args }),
+  }))
 }
 
 function registerOpsStatus(ctx: Context, config: ResolvedConfig): void {
@@ -219,6 +257,46 @@ function registerPublishedReactionCacheRebuild(ctx: Context, config: ResolvedCon
       }))
     },
     presentCall: args => ({ card: 'generic', title: 'Rebuild published Banyan reaction caches', kind: 'edit', rawInput: args }),
+  }))
+}
+
+function registerContentCacheEvict(ctx: Context, config: ResolvedConfig): void {
+  ctx.tools.register(defineTool({
+    name: 'banyan_content_cache_evict',
+    description: 'Evict the Redis content detail cache for one Banyan content item. Use when a content detail page looks stale while the database row is expected to be authoritative.',
+    parameters: {
+      contentId: { type: 'string', required: true, description: 'Banyan shared content ID.' },
+    },
+    output: TEXT_OUTPUT,
+    timeoutMs: config.timeoutMs,
+    execute: async (args) => {
+      const contentId = requireString(args, 'contentId')
+      return formatHttpResult(await requestJson(config, {
+        method: 'POST',
+        path: `/ops/cache/contents/${encodeURIComponent(contentId)}/evict`,
+      }))
+    },
+    presentCall: args => ({ card: 'generic', title: 'Evict Banyan content cache', kind: 'edit', rawInput: args }),
+  }))
+}
+
+function registerContentCacheWarm(ctx: Context, config: ResolvedConfig): void {
+  ctx.tools.register(defineTool({
+    name: 'banyan_content_cache_warm',
+    description: 'Rebuild the Redis content detail cache for one Banyan content item from the authoritative database row. Use after evicting stale content cache or before a demo of a known hot content item.',
+    parameters: {
+      contentId: { type: 'string', required: true, description: 'Banyan shared content ID.' },
+    },
+    output: TEXT_OUTPUT,
+    timeoutMs: config.timeoutMs,
+    execute: async (args) => {
+      const contentId = requireString(args, 'contentId')
+      return formatHttpResult(await requestJson(config, {
+        method: 'POST',
+        path: `/ops/cache/contents/${encodeURIComponent(contentId)}/warm`,
+      }))
+    },
+    presentCall: args => ({ card: 'generic', title: 'Warm Banyan content cache', kind: 'edit', rawInput: args }),
   }))
 }
 
@@ -437,9 +515,12 @@ function resolveConfig(config: Config): ResolvedConfig {
     authTokenEnv,
     timeoutMs,
     status: config.status ?? true,
+    auditRecent: config.auditRecent ?? true,
     contentSearch: config.contentSearch ?? true,
     rebuildReactionCache: config.rebuildReactionCache ?? true,
     rebuildPublishedReactionCaches: config.rebuildPublishedReactionCaches ?? true,
+    evictContentCache: config.evictContentCache ?? true,
+    warmContentCache: config.warmContentCache ?? true,
     reindexContent: config.reindexContent ?? true,
     ensureContentIndex: config.ensureContentIndex ?? true,
     reindexPublishedContent: config.reindexPublishedContent ?? true,
