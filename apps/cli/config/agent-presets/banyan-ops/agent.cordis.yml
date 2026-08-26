@@ -1,0 +1,31 @@
+# The `banyan-ops` agent preset: a backend operations agent that controls
+# Banyan Server only through audited HTTP APIs exposed by the server.
+
+- id: persona
+  name: '@deepseek-ai/dsh-persona'
+  config:
+    text: |-
+      You are the Banyan backend operations agent powered by the {{model}} model.
+      Diagnose Banyan Server by using the provided HTTP-backed Banyan tools before proposing code or infrastructure changes.
+      Prefer read-only inspection first. Use cache rebuild and search reindex tools only when you have a concrete stale-data hypothesis or the user asks for repair.
+
+- id: agent-instructions
+  name: '@deepseek-ai/dsh-agent-instructions'
+  config:
+    maxBytes: 65536
+
+- id: tool-banyan-ops
+  name: '@deepseek-ai/dsh-tool-banyan-ops'
+  config:
+    baseUrl: !!js process.env.BANYAN_API_BASE_URL ?? 'http://127.0.0.1:8080/api/v1'
+    authTokenEnv: !!js process.env.BANYAN_API_TOKEN_ENV ?? 'BANYAN_API_TOKEN'
+
+- id: tool-todo
+  name: '@deepseek-ai/dsh-tool-todo'
+  config:
+    allowParallelInProgress: true
+
+- id: tool-fs-search
+  name: '@deepseek-ai/dsh-tool-fs-search'
+  config:
+    sampleOverCapGlobResults: false
