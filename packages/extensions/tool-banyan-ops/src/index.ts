@@ -41,6 +41,8 @@ export interface Config {
   readonly cleanupExpiredUploads?: boolean
   /** Register outbox projection replay action. */
   readonly replayOutbox?: boolean
+  /** Register failed outbox projection retry action. */
+  readonly retryFailedOutbox?: boolean
 }
 
 export const Config: z<Config> = z.object({
@@ -56,6 +58,7 @@ export const Config: z<Config> = z.object({
   reindexPublishedContent: z.boolean().default(true),
   cleanupExpiredUploads: z.boolean().default(true),
   replayOutbox: z.boolean().default(true),
+  retryFailedOutbox: z.boolean().default(true),
 })
 
 interface ResolvedConfig {
@@ -71,6 +74,7 @@ interface ResolvedConfig {
   readonly reindexPublishedContent: boolean
   readonly cleanupExpiredUploads: boolean
   readonly replayOutbox: boolean
+  readonly retryFailedOutbox: boolean
 }
 
 interface RequestOptions {
@@ -102,7 +106,7 @@ const PROMPT_TEXT =
   + 'Use banyan_reaction_cache_rebuild only when Redis reaction counters may be stale, and banyan_content_reindex only when a content item is missing or stale in Elasticsearch. '
   + 'Use banyan_content_index_ensure before Elasticsearch maintenance if the content index may be missing, and banyan_content_reindex_published to rebuild a bounded page of published content. '
   + 'Use banyan_upload_cleanup to abandon expired pending upload objects and free stale local object files. '
-  + 'Use banyan_outbox_replay to replay stored outbox events through the backend projection pipeline after consumer outages or local test resets. '
+  + 'Use banyan_outbox_retry_failed when ops status reports failed outbox projections, and banyan_outbox_replay to replay stored outbox events after broader consumer outages or local test resets. '
   + 'Do not bypass these tools by accessing the database directly unless the user explicitly asks for low-level diagnosis.'
 
 /** Register enabled Banyan Server tools. */
@@ -122,6 +126,7 @@ export function apply(ctx: Context, config: Config): void {
   if (resolved.reindexPublishedContent) registerPublishedContentReindex(ctx, resolved)
   if (resolved.cleanupExpiredUploads) registerUploadCleanup(ctx, resolved)
   if (resolved.replayOutbox) registerOutboxReplay(ctx, resolved)
+  if (resolved.retryFailedOutbox) registerOutboxRetryFailed(ctx, resolved)
 }
 
 function registerOpsStatus(ctx: Context, config: ResolvedConfig): void {
@@ -293,6 +298,29 @@ function registerOutboxReplay(ctx: Context, config: ResolvedConfig): void {
   }))
 }
 
+function registerOutboxRetryFailed(ctx: Context, config: ResolvedConfig): void {
+  ctx.tools.register(defineTool({
+    name: 'banyan_outbox_retry_failed',
+    description: 'Retry only failed Banyan outbox projections. Use when ops status reports failedEvents > 0 before doing a broader replay.',
+    parameters: {
+      limit: { type: 'integer', description: 'Maximum failed outbox events to retry. Defaults to 200, maximum enforced by Banyan Server.' },
+    },
+    output: TEXT_OUTPUT,
+    timeoutMs: config.timeoutMs,
+    execute: async (args) => {
+      const query = args as Record<string, unknown>
+      return formatHttpResult(await requestJson(config, {
+        method: 'POST',
+        path: '/ops/outbox/retry-failed',
+        query: {
+          limit: readLimit(query.limit, 200),
+        },
+      }))
+    },
+    presentCall: args => ({ card: 'generic', title: 'Retry failed Banyan outbox projections', kind: 'edit', rawInput: args }),
+  }))
+}
+
 async function requestJson(config: ResolvedConfig, options: RequestOptions): Promise<BanyanHttpResult> {
   const method = options.method ?? 'GET'
   const url = buildUrl(config.baseUrl, options.path, options.query)
@@ -388,5 +416,6 @@ function resolveConfig(config: Config): ResolvedConfig {
     reindexPublishedContent: config.reindexPublishedContent ?? true,
     cleanupExpiredUploads: config.cleanupExpiredUploads ?? true,
     replayOutbox: config.replayOutbox ?? true,
+    retryFailedOutbox: config.retryFailedOutbox ?? true,
   }
 }
