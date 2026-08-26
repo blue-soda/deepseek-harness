@@ -35,6 +35,8 @@ export interface Config {
   readonly reindexContent?: boolean
   /** Register expired pending upload cleanup action. */
   readonly cleanupExpiredUploads?: boolean
+  /** Register outbox projection replay action. */
+  readonly replayOutbox?: boolean
 }
 
 export const Config: z<Config> = z.object({
@@ -47,6 +49,7 @@ export const Config: z<Config> = z.object({
   rebuildReactionCache: z.boolean().default(true),
   reindexContent: z.boolean().default(true),
   cleanupExpiredUploads: z.boolean().default(true),
+  replayOutbox: z.boolean().default(true),
 })
 
 interface ResolvedConfig {
@@ -59,6 +62,7 @@ interface ResolvedConfig {
   readonly rebuildReactionCache: boolean
   readonly reindexContent: boolean
   readonly cleanupExpiredUploads: boolean
+  readonly replayOutbox: boolean
 }
 
 interface RequestOptions {
@@ -89,6 +93,7 @@ const PROMPT_TEXT =
   + 'banyan_content_search searches public/friend/self content through the server search layer, backed by Elasticsearch when enabled. '
   + 'Use banyan_reaction_cache_rebuild only when Redis reaction counters may be stale, and banyan_content_reindex only when a content item is missing or stale in Elasticsearch. '
   + 'Use banyan_upload_cleanup to abandon expired pending upload objects and free stale local object files. '
+  + 'Use banyan_outbox_replay to replay stored outbox events through the backend projection pipeline after consumer outages or local test resets. '
   + 'Do not bypass these tools by accessing the database directly unless the user explicitly asks for low-level diagnosis.'
 
 /** Register enabled Banyan Server tools. */
@@ -105,6 +110,7 @@ export function apply(ctx: Context, config: Config): void {
   if (resolved.rebuildReactionCache) registerReactionCacheRebuild(ctx, resolved)
   if (resolved.reindexContent) registerContentReindex(ctx, resolved)
   if (resolved.cleanupExpiredUploads) registerUploadCleanup(ctx, resolved)
+  if (resolved.replayOutbox) registerOutboxReplay(ctx, resolved)
 }
 
 function registerOpsStatus(ctx: Context, config: ResolvedConfig): void {
@@ -215,6 +221,29 @@ function registerUploadCleanup(ctx: Context, config: ResolvedConfig): void {
   }))
 }
 
+function registerOutboxReplay(ctx: Context, config: ResolvedConfig): void {
+  ctx.tools.register(defineTool({
+    name: 'banyan_outbox_replay',
+    description: 'Replay stored Banyan outbox events through the backend projection pipeline. Use after Canal/Kafka consumer outages, cache loss, or local development resets.',
+    parameters: {
+      limit: { type: 'integer', description: 'Maximum outbox events to scan. Defaults to 200, maximum enforced by Banyan Server.' },
+    },
+    output: TEXT_OUTPUT,
+    timeoutMs: config.timeoutMs,
+    execute: async (args) => {
+      const query = args as Record<string, unknown>
+      return formatHttpResult(await requestJson(config, {
+        method: 'POST',
+        path: '/ops/outbox/replay',
+        query: {
+          limit: readLimit(query.limit),
+        },
+      }))
+    },
+    presentCall: args => ({ card: 'generic', title: 'Replay Banyan outbox projections', kind: 'edit', rawInput: args }),
+  }))
+}
+
 async function requestJson(config: ResolvedConfig, options: RequestOptions): Promise<BanyanHttpResult> {
   const method = options.method ?? 'GET'
   const url = buildUrl(config.baseUrl, options.path, options.query)
@@ -307,5 +336,6 @@ function resolveConfig(config: Config): ResolvedConfig {
     rebuildReactionCache: config.rebuildReactionCache ?? true,
     reindexContent: config.reindexContent ?? true,
     cleanupExpiredUploads: config.cleanupExpiredUploads ?? true,
+    replayOutbox: config.replayOutbox ?? true,
   }
 }

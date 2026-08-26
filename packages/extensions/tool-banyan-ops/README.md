@@ -13,6 +13,7 @@ authorization, audit, and recovery behavior owned by the backend.
 - `banyan_reaction_cache_rebuild`: rebuild Redis reaction counters for one content item.
 - `banyan_content_reindex`: reindex one content item into Elasticsearch.
 - `banyan_upload_cleanup`: abandon expired pending upload objects and delete stale local dev-upload files.
+- `banyan_outbox_replay`: replay stored outbox events through Banyan Server projections.
 
 ## Configuration
 
