@@ -9,6 +9,7 @@ authorization, audit, and recovery behavior owned by the backend.
 ## Tools
 
 - `banyan_ops_status`: read entity counts and infrastructure status.
+- `banyan_ops_health`: actively check Redis, Elasticsearch, and Kafka connectivity through Banyan Server.
 - `banyan_ops_audit_recent`: read recent audited maintenance actions.
 - `banyan_content_search`: search shared content through Banyan Search.
 - `banyan_content_cache_evict`: evict one content detail cache entry.

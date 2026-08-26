@@ -27,6 +27,8 @@ export interface Config {
   readonly timeoutMs?: number
   /** Register read-only server status. */
   readonly status?: boolean
+  /** Register read-only infrastructure health checks. */
+  readonly health?: boolean
   /** Register read-only recent operations audit log. */
   readonly auditRecent?: boolean
   /** Register content search over Banyan Server search API. */
@@ -67,6 +69,7 @@ export const Config: z<Config> = z.object({
   authTokenEnv: z.string().default('BANYAN_API_TOKEN'),
   timeoutMs: z.number().step(1).min(1).default(10_000),
   status: z.boolean().default(true),
+  health: z.boolean().default(true),
   auditRecent: z.boolean().default(true),
   contentSearch: z.boolean().default(true),
   rebuildReactionCache: z.boolean().default(true),
@@ -91,6 +94,7 @@ interface ResolvedConfig {
   readonly authTokenEnv: string
   readonly timeoutMs: number
   readonly status: boolean
+  readonly health: boolean
   readonly auditRecent: boolean
   readonly contentSearch: boolean
   readonly rebuildReactionCache: boolean
@@ -133,7 +137,7 @@ const TEXT_OUTPUT = {
 
 const PROMPT_TEXT =
   'Use Banyan ops tools to inspect and repair the Banyan backend through its audited HTTP API. '
-  + 'banyan_ops_status is read-only and should be called before maintenance; banyan_ops_audit_recent shows who recently ran maintenance actions. '
+  + 'banyan_ops_status is read-only and should be called before maintenance; banyan_ops_health actively checks Redis, Elasticsearch, and Kafka connectivity; banyan_ops_audit_recent shows who recently ran maintenance actions. '
   + 'banyan_content_search searches public/friend/self content through the server search layer, backed by Elasticsearch when enabled. '
   + 'Use banyan_content_cache_evict or banyan_content_cache_warm for stale content details, banyan_content_counters_rebuild for stale denormalized like/favorite counts, banyan_reaction_cache_rebuild for one stale Redis reaction bitmap, banyan_reaction_cache_rebuild_published after Redis cache loss, and banyan_content_reindex only when a content item is missing or stale in Elasticsearch. '
   + 'Use banyan_content_feed_rebuild_public when the public sharing feed is empty or out of order after Redis loss or projection outages. '
@@ -152,6 +156,7 @@ export function apply(ctx: Context, config: Config): void {
   })
 
   if (resolved.status) registerOpsStatus(ctx, resolved)
+  if (resolved.health) registerOpsHealth(ctx, resolved)
   if (resolved.auditRecent) registerOpsAuditRecent(ctx, resolved)
   if (resolved.contentSearch) registerContentSearch(ctx, resolved)
   if (resolved.rebuildReactionCache) registerReactionCacheRebuild(ctx, resolved)
@@ -203,6 +208,19 @@ function registerOpsStatus(ctx: Context, config: ResolvedConfig): void {
     isConcurrencySafe: () => true,
     execute: async () => formatHttpResult(await requestJson(config, { path: '/ops/status' })),
     presentCall: args => ({ card: 'generic', title: 'Read Banyan ops status', kind: 'read', rawInput: args }),
+  }))
+}
+
+function registerOpsHealth(ctx: Context, config: ResolvedConfig): void {
+  ctx.tools.register(defineTool({
+    name: 'banyan_ops_health',
+    description: 'Actively check Banyan infrastructure health over the audited backend API. Returns Redis, Elasticsearch, and Kafka UP/DOWN/SKIPPED states with latency and concise error messages.',
+    parameters: {},
+    output: TEXT_OUTPUT,
+    timeoutMs: config.timeoutMs,
+    isConcurrencySafe: () => true,
+    execute: async () => formatHttpResult(await requestJson(config, { path: '/ops/health' })),
+    presentCall: args => ({ card: 'generic', title: 'Check Banyan infrastructure health', kind: 'read', rawInput: args }),
   }))
 }
 
@@ -627,6 +645,7 @@ function resolveConfig(config: Config): ResolvedConfig {
     authTokenEnv,
     timeoutMs,
     status: config.status ?? true,
+    health: config.health ?? true,
     auditRecent: config.auditRecent ?? true,
     contentSearch: config.contentSearch ?? true,
     rebuildReactionCache: config.rebuildReactionCache ?? true,
