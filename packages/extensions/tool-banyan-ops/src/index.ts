@@ -53,6 +53,8 @@ export interface Config {
   readonly reindexContent?: boolean
   /** Register Elasticsearch content index ensure action. */
   readonly ensureContentIndex?: boolean
+  /** Register read-only Elasticsearch content index inspection. */
+  readonly inspectContentIndex?: boolean
   /** Register bulk published-content reindex action. */
   readonly reindexPublishedContent?: boolean
   /** Register expired pending upload cleanup action. */
@@ -84,6 +86,7 @@ export const Config: z<Config> = z.object({
   rebuildPublicFeed: z.boolean().default(true),
   reindexContent: z.boolean().default(true),
   ensureContentIndex: z.boolean().default(true),
+  inspectContentIndex: z.boolean().default(true),
   reindexPublishedContent: z.boolean().default(true),
   cleanupExpiredUploads: z.boolean().default(true),
   replayOutbox: z.boolean().default(true),
@@ -110,6 +113,7 @@ interface ResolvedConfig {
   readonly rebuildPublicFeed: boolean
   readonly reindexContent: boolean
   readonly ensureContentIndex: boolean
+  readonly inspectContentIndex: boolean
   readonly reindexPublishedContent: boolean
   readonly cleanupExpiredUploads: boolean
   readonly replayOutbox: boolean
@@ -145,7 +149,7 @@ const PROMPT_TEXT =
   + 'banyan_content_search searches public/friend/self content through the server search layer, backed by Elasticsearch when enabled. '
   + 'Use banyan_content_cache_evict or banyan_content_cache_warm for stale content details, banyan_content_counters_rebuild for stale denormalized like/favorite counts, banyan_reaction_cache_rebuild for one stale Redis reaction bitmap, banyan_reaction_cache_rebuild_published after Redis cache loss, and banyan_content_reindex only when a content item is missing or stale in Elasticsearch. '
   + 'Use banyan_content_feed_rebuild_public when the public sharing feed is empty or out of order after Redis loss or projection outages. '
-  + 'Use banyan_content_index_ensure before Elasticsearch maintenance if the content index may be missing, and banyan_content_reindex_published to rebuild a bounded page of published content. '
+  + 'Use banyan_content_index_inspect before Elasticsearch maintenance to check whether the content index exists and how many documents it contains, banyan_content_index_ensure if the index may be missing, and banyan_content_reindex_published to rebuild a bounded page of published content. '
   + 'Use banyan_upload_cleanup to abandon expired pending upload objects and free stale local object files. '
   + 'Use banyan_outbox_failed_recent when ops status reports failed outbox projections, banyan_outbox_retry_failed to retry those failures, and banyan_outbox_replay to replay stored outbox events after broader consumer outages or local test resets. '
   + 'Do not bypass these tools by accessing the database directly unless the user explicitly asks for low-level diagnosis.'
@@ -172,6 +176,7 @@ export function apply(ctx: Context, config: Config): void {
   if (resolved.rebuildPublishedContentCounters) registerPublishedContentCountersRebuild(ctx, resolved)
   if (resolved.rebuildPublicFeed) registerPublicFeedRebuild(ctx, resolved)
   if (resolved.reindexContent) registerContentReindex(ctx, resolved)
+  if (resolved.inspectContentIndex) registerContentIndexInspect(ctx, resolved)
   if (resolved.ensureContentIndex) registerContentIndexEnsure(ctx, resolved)
   if (resolved.reindexPublishedContent) registerPublishedContentReindex(ctx, resolved)
   if (resolved.cleanupExpiredUploads) registerUploadCleanup(ctx, resolved)
@@ -472,6 +477,21 @@ function registerContentIndexEnsure(ctx: Context, config: ResolvedConfig): void 
   }))
 }
 
+function registerContentIndexInspect(ctx: Context, config: ResolvedConfig): void {
+  ctx.tools.register(defineTool({
+    name: 'banyan_content_index_inspect',
+    description: 'Inspect the configured Banyan Elasticsearch content index through the audited backend API. Returns enabled, ok, exists, and documentCount. Use before ensure/reindex or when search results look missing or stale.',
+    parameters: {},
+    output: TEXT_OUTPUT,
+    timeoutMs: config.timeoutMs,
+    isConcurrencySafe: () => true,
+    execute: async () => formatHttpResult(await requestJson(config, {
+      path: '/ops/search/contents/index/inspect',
+    })),
+    presentCall: args => ({ card: 'generic', title: 'Inspect Banyan content search index', kind: 'read', rawInput: args }),
+  }))
+}
+
 function registerPublishedContentReindex(ctx: Context, config: ResolvedConfig): void {
   ctx.tools.register(defineTool({
     name: 'banyan_content_reindex_published',
@@ -687,6 +707,7 @@ function resolveConfig(config: Config): ResolvedConfig {
     rebuildPublishedContentCounters: config.rebuildPublishedContentCounters ?? true,
     rebuildPublicFeed: config.rebuildPublicFeed ?? true,
     reindexContent: config.reindexContent ?? true,
+    inspectContentIndex: config.inspectContentIndex ?? true,
     ensureContentIndex: config.ensureContentIndex ?? true,
     reindexPublishedContent: config.reindexPublishedContent ?? true,
     cleanupExpiredUploads: config.cleanupExpiredUploads ?? true,
