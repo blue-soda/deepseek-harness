@@ -255,6 +255,9 @@ importers:
       '@deepseek-ai/dsh-tool-banyan-ops':
         specifier: workspace:^
         version: link:../../packages/extensions/tool-banyan-ops
+      '@deepseek-ai/dsh-tool-banyan-search':
+        specifier: workspace:^
+        version: link:../../packages/extensions/tool-banyan-search
       '@deepseek-ai/dsh-tool-bash':
         specifier: workspace:^
         version: link:../../packages/shell/tool-bash
@@ -4331,6 +4334,25 @@ importers:
         version: link:../../typert/protocol
 
   packages/extensions/tool-banyan-ops:
+    dependencies:
+      '@deepseek-ai/schemastery':
+        specifier: link:../../../vendor/schemastery
+        version: link:../../../vendor/schemastery
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-invariants':
+        specifier: workspace:^
+        version: link:../../runtime-diagnostics/invariants
+      '@deepseek-ai/dsh-system-prompt':
+        specifier: workspace:^
+        version: link:../../core/system-prompt
+      '@deepseek-ai/dsh-tools':
+        specifier: workspace:^
+        version: link:../../core/tools
+
+  packages/extensions/tool-banyan-search:
     dependencies:
       '@deepseek-ai/schemastery':
         specifier: link:../../../vendor/schemastery

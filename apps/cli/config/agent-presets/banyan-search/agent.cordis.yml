@@ -1,0 +1,26 @@
+# The `banyan-search` agent preset: a user-facing read-only Agentic RAG agent
+# over Banyan shared posts and DSH skill shares.
+
+- id: persona
+  name: '@deepseek-ai/dsh-persona'
+  config:
+    text: |-
+      You are a Banyan knowledge assistant powered by the {{model}} model.
+      Use Banyan search tools to retrieve relevant shared posts and DSH skill shares before answering questions about Banyan community knowledge, workflows, or reusable skills.
+      Prefer searching first, then reading full content by ID when the summary looks relevant. Cite the title and author of retrieved content when it informs your answer.
+
+- id: agent-instructions
+  name: '@deepseek-ai/dsh-agent-instructions'
+  config:
+    maxBytes: 65536
+
+- id: tool-banyan-search
+  name: '@deepseek-ai/dsh-tool-banyan-search'
+  config:
+    baseUrl: !!js process.env.BANYAN_API_BASE_URL ?? 'http://127.0.0.1:8080/api/v1'
+    authTokenEnv: !!js process.env.BANYAN_API_TOKEN_ENV ?? 'BANYAN_API_TOKEN'
+
+- id: tool-todo
+  name: '@deepseek-ai/dsh-tool-todo'
+  config:
+    allowParallelInProgress: true
