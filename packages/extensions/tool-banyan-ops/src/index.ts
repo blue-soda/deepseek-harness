@@ -33,6 +33,10 @@ export interface Config {
   readonly rebuildReactionCache?: boolean
   /** Register Elasticsearch content reindex action. */
   readonly reindexContent?: boolean
+  /** Register Elasticsearch content index ensure action. */
+  readonly ensureContentIndex?: boolean
+  /** Register bulk published-content reindex action. */
+  readonly reindexPublishedContent?: boolean
   /** Register expired pending upload cleanup action. */
   readonly cleanupExpiredUploads?: boolean
   /** Register outbox projection replay action. */
@@ -48,6 +52,8 @@ export const Config: z<Config> = z.object({
   contentSearch: z.boolean().default(true),
   rebuildReactionCache: z.boolean().default(true),
   reindexContent: z.boolean().default(true),
+  ensureContentIndex: z.boolean().default(true),
+  reindexPublishedContent: z.boolean().default(true),
   cleanupExpiredUploads: z.boolean().default(true),
   replayOutbox: z.boolean().default(true),
 })
@@ -61,6 +67,8 @@ interface ResolvedConfig {
   readonly contentSearch: boolean
   readonly rebuildReactionCache: boolean
   readonly reindexContent: boolean
+  readonly ensureContentIndex: boolean
+  readonly reindexPublishedContent: boolean
   readonly cleanupExpiredUploads: boolean
   readonly replayOutbox: boolean
 }
@@ -92,6 +100,7 @@ const PROMPT_TEXT =
   + 'banyan_ops_status is read-only and should be called before maintenance. '
   + 'banyan_content_search searches public/friend/self content through the server search layer, backed by Elasticsearch when enabled. '
   + 'Use banyan_reaction_cache_rebuild only when Redis reaction counters may be stale, and banyan_content_reindex only when a content item is missing or stale in Elasticsearch. '
+  + 'Use banyan_content_index_ensure before Elasticsearch maintenance if the content index may be missing, and banyan_content_reindex_published to rebuild a bounded page of published content. '
   + 'Use banyan_upload_cleanup to abandon expired pending upload objects and free stale local object files. '
   + 'Use banyan_outbox_replay to replay stored outbox events through the backend projection pipeline after consumer outages or local test resets. '
   + 'Do not bypass these tools by accessing the database directly unless the user explicitly asks for low-level diagnosis.'
@@ -109,6 +118,8 @@ export function apply(ctx: Context, config: Config): void {
   if (resolved.contentSearch) registerContentSearch(ctx, resolved)
   if (resolved.rebuildReactionCache) registerReactionCacheRebuild(ctx, resolved)
   if (resolved.reindexContent) registerContentReindex(ctx, resolved)
+  if (resolved.ensureContentIndex) registerContentIndexEnsure(ctx, resolved)
+  if (resolved.reindexPublishedContent) registerPublishedContentReindex(ctx, resolved)
   if (resolved.cleanupExpiredUploads) registerUploadCleanup(ctx, resolved)
   if (resolved.replayOutbox) registerOutboxReplay(ctx, resolved)
 }
@@ -198,6 +209,44 @@ function registerContentReindex(ctx: Context, config: ResolvedConfig): void {
   }))
 }
 
+function registerContentIndexEnsure(ctx: Context, config: ResolvedConfig): void {
+  ctx.tools.register(defineTool({
+    name: 'banyan_content_index_ensure',
+    description: 'Create the Banyan Elasticsearch content index if it is missing. Use before bulk reindexing or after local Elasticsearch resets.',
+    parameters: {},
+    output: TEXT_OUTPUT,
+    timeoutMs: config.timeoutMs,
+    execute: async () => formatHttpResult(await requestJson(config, {
+      method: 'POST',
+      path: '/ops/search/contents/index/ensure',
+    })),
+    presentCall: args => ({ card: 'generic', title: 'Ensure Banyan content search index', kind: 'edit', rawInput: args }),
+  }))
+}
+
+function registerPublishedContentReindex(ctx: Context, config: ResolvedConfig): void {
+  ctx.tools.register(defineTool({
+    name: 'banyan_content_reindex_published',
+    description: 'Bulk reindex a bounded page of published Banyan content into Elasticsearch from authoritative database rows. Use after search index loss or projection outages.',
+    parameters: {
+      limit: { type: 'integer', description: 'Maximum published content rows to scan. Defaults to 200, maximum enforced by Banyan Server.' },
+    },
+    output: TEXT_OUTPUT,
+    timeoutMs: config.timeoutMs,
+    execute: async (args) => {
+      const query = args as Record<string, unknown>
+      return formatHttpResult(await requestJson(config, {
+        method: 'POST',
+        path: '/ops/search/contents/reindex-published',
+        query: {
+          limit: readLimit(query.limit, 200),
+        },
+      }))
+    },
+    presentCall: args => ({ card: 'generic', title: 'Reindex published Banyan content', kind: 'edit', rawInput: args }),
+  }))
+}
+
 function registerUploadCleanup(ctx: Context, config: ResolvedConfig): void {
   ctx.tools.register(defineTool({
     name: 'banyan_upload_cleanup',
@@ -213,7 +262,7 @@ function registerUploadCleanup(ctx: Context, config: ResolvedConfig): void {
         method: 'POST',
         path: '/ops/uploads/abandon-expired',
         query: {
-          limit: readLimit(query.limit),
+          limit: readLimit(query.limit, 200),
         },
       }))
     },
@@ -236,7 +285,7 @@ function registerOutboxReplay(ctx: Context, config: ResolvedConfig): void {
         method: 'POST',
         path: '/ops/outbox/replay',
         query: {
-          limit: readLimit(query.limit),
+          limit: readLimit(query.limit, 200),
         },
       }))
     },
@@ -307,8 +356,8 @@ function formatHttpResult(result: BanyanHttpResult): string {
   return JSON.stringify(result, null, 2)
 }
 
-function readLimit(value: unknown): number {
-  return Number.isSafeInteger(value) && Number(value) > 0 ? Number(value) : 10
+function readLimit(value: unknown, defaultValue = 10): number {
+  return Number.isSafeInteger(value) && Number(value) > 0 ? Number(value) : defaultValue
 }
 
 function requireString(args: unknown, key: string): string {
@@ -335,6 +384,8 @@ function resolveConfig(config: Config): ResolvedConfig {
     contentSearch: config.contentSearch ?? true,
     rebuildReactionCache: config.rebuildReactionCache ?? true,
     reindexContent: config.reindexContent ?? true,
+    ensureContentIndex: config.ensureContentIndex ?? true,
+    reindexPublishedContent: config.reindexPublishedContent ?? true,
     cleanupExpiredUploads: config.cleanupExpiredUploads ?? true,
     replayOutbox: config.replayOutbox ?? true,
   }

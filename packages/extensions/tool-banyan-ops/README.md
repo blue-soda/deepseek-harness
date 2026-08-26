@@ -12,6 +12,8 @@ authorization, audit, and recovery behavior owned by the backend.
 - `banyan_content_search`: search shared content through Banyan Search.
 - `banyan_reaction_cache_rebuild`: rebuild Redis reaction counters for one content item.
 - `banyan_content_reindex`: reindex one content item into Elasticsearch.
+- `banyan_content_index_ensure`: create the Elasticsearch content index if it is missing.
+- `banyan_content_reindex_published`: bulk reindex a bounded page of published content.
 - `banyan_upload_cleanup`: abandon expired pending upload objects and delete stale local dev-upload files.
 - `banyan_outbox_replay`: replay stored outbox events through Banyan Server projections.
 
