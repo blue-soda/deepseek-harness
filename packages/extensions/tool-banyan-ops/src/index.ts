@@ -57,6 +57,14 @@ export interface Config {
   readonly inspectContentIndex?: boolean
   /** Register bulk published-content reindex action. */
   readonly reindexPublishedContent?: boolean
+  /** Register read-only Elasticsearch knowledge index inspection. */
+  readonly inspectKnowledgeIndex?: boolean
+  /** Register Elasticsearch knowledge index ensure action. */
+  readonly ensureKnowledgeIndex?: boolean
+  /** Register one knowledge document reindex action. */
+  readonly reindexKnowledgeDocument?: boolean
+  /** Register bulk knowledge document reindex action. */
+  readonly reindexKnowledgeDocuments?: boolean
   /** Register expired pending upload cleanup action. */
   readonly cleanupExpiredUploads?: boolean
   /** Register outbox projection replay action. */
@@ -88,6 +96,10 @@ export const Config: z<Config> = z.object({
   ensureContentIndex: z.boolean().default(true),
   inspectContentIndex: z.boolean().default(true),
   reindexPublishedContent: z.boolean().default(true),
+  inspectKnowledgeIndex: z.boolean().default(true),
+  ensureKnowledgeIndex: z.boolean().default(true),
+  reindexKnowledgeDocument: z.boolean().default(true),
+  reindexKnowledgeDocuments: z.boolean().default(true),
   cleanupExpiredUploads: z.boolean().default(true),
   replayOutbox: z.boolean().default(true),
   failedOutboxRecent: z.boolean().default(true),
@@ -115,6 +127,10 @@ interface ResolvedConfig {
   readonly ensureContentIndex: boolean
   readonly inspectContentIndex: boolean
   readonly reindexPublishedContent: boolean
+  readonly inspectKnowledgeIndex: boolean
+  readonly ensureKnowledgeIndex: boolean
+  readonly reindexKnowledgeDocument: boolean
+  readonly reindexKnowledgeDocuments: boolean
   readonly cleanupExpiredUploads: boolean
   readonly replayOutbox: boolean
   readonly failedOutboxRecent: boolean
@@ -150,6 +166,7 @@ const PROMPT_TEXT =
   + 'Use banyan_content_cache_evict or banyan_content_cache_warm for stale content details, banyan_content_counters_rebuild for stale denormalized like/favorite counts, banyan_reaction_cache_rebuild for one stale Redis reaction bitmap, banyan_reaction_cache_rebuild_published after Redis cache loss, and banyan_content_reindex only when a content item is missing or stale in Elasticsearch. '
   + 'Use banyan_content_feed_rebuild_public when the public sharing feed is empty or out of order after Redis loss or projection outages. '
   + 'Use banyan_content_index_inspect before Elasticsearch maintenance to check whether the content index exists and how many documents it contains, banyan_content_index_ensure if the index may be missing, and banyan_content_reindex_published to rebuild a bounded page of published content. '
+  + 'Use banyan_knowledge_index_inspect before knowledge/RAG index maintenance, banyan_knowledge_index_ensure if the knowledge index may be missing, banyan_knowledge_reindex_document for one stale document, and banyan_knowledge_reindex_documents after Elasticsearch resets or ingestion outages. '
   + 'Use banyan_upload_cleanup to abandon expired pending upload objects and free stale local object files. '
   + 'Use banyan_outbox_failed_recent when ops status reports failed outbox projections, banyan_outbox_retry_failed to retry those failures, and banyan_outbox_replay to replay stored outbox events after broader consumer outages or local test resets. '
   + 'Do not bypass these tools by accessing the database directly unless the user explicitly asks for low-level diagnosis.'
@@ -179,6 +196,10 @@ export function apply(ctx: Context, config: Config): void {
   if (resolved.inspectContentIndex) registerContentIndexInspect(ctx, resolved)
   if (resolved.ensureContentIndex) registerContentIndexEnsure(ctx, resolved)
   if (resolved.reindexPublishedContent) registerPublishedContentReindex(ctx, resolved)
+  if (resolved.inspectKnowledgeIndex) registerKnowledgeIndexInspect(ctx, resolved)
+  if (resolved.ensureKnowledgeIndex) registerKnowledgeIndexEnsure(ctx, resolved)
+  if (resolved.reindexKnowledgeDocument) registerKnowledgeDocumentReindex(ctx, resolved)
+  if (resolved.reindexKnowledgeDocuments) registerKnowledgeDocumentsReindex(ctx, resolved)
   if (resolved.cleanupExpiredUploads) registerUploadCleanup(ctx, resolved)
   if (resolved.replayOutbox) registerOutboxReplay(ctx, resolved)
   if (resolved.failedOutboxRecent) registerOutboxFailedRecent(ctx, resolved)
@@ -515,6 +536,79 @@ function registerPublishedContentReindex(ctx: Context, config: ResolvedConfig): 
   }))
 }
 
+function registerKnowledgeIndexInspect(ctx: Context, config: ResolvedConfig): void {
+  ctx.tools.register(defineTool({
+    name: 'banyan_knowledge_index_inspect',
+    description: 'Inspect the configured Banyan Elasticsearch knowledge index through the audited backend API. Returns enabled, ok, exists, and documentCount. Use before ensure/reindex or when Agentic RAG search looks missing or stale.',
+    parameters: {},
+    output: TEXT_OUTPUT,
+    timeoutMs: config.timeoutMs,
+    isConcurrencySafe: () => true,
+    execute: async () => formatHttpResult(await requestJson(config, {
+      path: '/ops/search/knowledge/index/inspect',
+    })),
+    presentCall: args => ({ card: 'generic', title: 'Inspect Banyan knowledge search index', kind: 'read', rawInput: args }),
+  }))
+}
+
+function registerKnowledgeIndexEnsure(ctx: Context, config: ResolvedConfig): void {
+  ctx.tools.register(defineTool({
+    name: 'banyan_knowledge_index_ensure',
+    description: 'Create the Banyan Elasticsearch knowledge index if it is missing. Use before knowledge reindexing or after local Elasticsearch resets.',
+    parameters: {},
+    output: TEXT_OUTPUT,
+    timeoutMs: config.timeoutMs,
+    execute: async () => formatHttpResult(await requestJson(config, {
+      method: 'POST',
+      path: '/ops/search/knowledge/index/ensure',
+    })),
+    presentCall: args => ({ card: 'generic', title: 'Ensure Banyan knowledge search index', kind: 'edit', rawInput: args }),
+  }))
+}
+
+function registerKnowledgeDocumentReindex(ctx: Context, config: ResolvedConfig): void {
+  ctx.tools.register(defineTool({
+    name: 'banyan_knowledge_reindex_document',
+    description: 'Reindex one Banyan knowledge document into Elasticsearch from authoritative document chunks. Use when one Agentic RAG document is missing or stale.',
+    parameters: {
+      documentId: { type: 'string', required: true, description: 'Banyan knowledge document ID.' },
+    },
+    output: TEXT_OUTPUT,
+    timeoutMs: config.timeoutMs,
+    execute: async (args) => {
+      const documentId = requireString(args, 'documentId')
+      return formatHttpResult(await requestJson(config, {
+        method: 'POST',
+        path: `/ops/search/knowledge/${encodeURIComponent(documentId)}/index`,
+      }))
+    },
+    presentCall: args => ({ card: 'generic', title: 'Reindex Banyan knowledge document', kind: 'edit', rawInput: args }),
+  }))
+}
+
+function registerKnowledgeDocumentsReindex(ctx: Context, config: ResolvedConfig): void {
+  ctx.tools.register(defineTool({
+    name: 'banyan_knowledge_reindex_documents',
+    description: 'Bulk reindex a bounded page of Banyan knowledge documents into Elasticsearch from authoritative document chunks. Use after search index loss, RAG ingestion outages, or local development resets.',
+    parameters: {
+      limit: { type: 'integer', description: 'Maximum knowledge documents to scan. Defaults to 200, maximum enforced by Banyan Server.' },
+    },
+    output: TEXT_OUTPUT,
+    timeoutMs: config.timeoutMs,
+    execute: async (args) => {
+      const query = args as Record<string, unknown>
+      return formatHttpResult(await requestJson(config, {
+        method: 'POST',
+        path: '/ops/search/knowledge/reindex-documents',
+        query: {
+          limit: readLimit(query.limit, 200),
+        },
+      }))
+    },
+    presentCall: args => ({ card: 'generic', title: 'Reindex Banyan knowledge documents', kind: 'edit', rawInput: args }),
+  }))
+}
+
 function registerUploadCleanup(ctx: Context, config: ResolvedConfig): void {
   ctx.tools.register(defineTool({
     name: 'banyan_upload_cleanup',
@@ -710,6 +804,10 @@ function resolveConfig(config: Config): ResolvedConfig {
     inspectContentIndex: config.inspectContentIndex ?? true,
     ensureContentIndex: config.ensureContentIndex ?? true,
     reindexPublishedContent: config.reindexPublishedContent ?? true,
+    inspectKnowledgeIndex: config.inspectKnowledgeIndex ?? true,
+    ensureKnowledgeIndex: config.ensureKnowledgeIndex ?? true,
+    reindexKnowledgeDocument: config.reindexKnowledgeDocument ?? true,
+    reindexKnowledgeDocuments: config.reindexKnowledgeDocuments ?? true,
     cleanupExpiredUploads: config.cleanupExpiredUploads ?? true,
     replayOutbox: config.replayOutbox ?? true,
     failedOutboxRecent: config.failedOutboxRecent ?? true,

@@ -24,6 +24,10 @@ authorization, audit, and recovery behavior owned by the backend.
 - `banyan_content_index_inspect`: inspect whether the configured Elasticsearch content index exists and how many documents it contains.
 - `banyan_content_index_ensure`: create the Elasticsearch content index if it is missing.
 - `banyan_content_reindex_published`: bulk reindex a bounded page of published content.
+- `banyan_knowledge_index_inspect`: inspect whether the configured Elasticsearch knowledge index exists and how many chunk documents it contains.
+- `banyan_knowledge_index_ensure`: create the Elasticsearch knowledge index if it is missing.
+- `banyan_knowledge_reindex_document`: reindex one knowledge document's chunks.
+- `banyan_knowledge_reindex_documents`: bulk reindex a bounded page of knowledge documents.
 - `banyan_upload_cleanup`: abandon expired pending upload objects and delete stale local dev-upload files.
 - `banyan_outbox_replay`: replay stored outbox events through Banyan Server projections.
 - `banyan_outbox_failed_recent`: inspect recent failed outbox projection rows.
