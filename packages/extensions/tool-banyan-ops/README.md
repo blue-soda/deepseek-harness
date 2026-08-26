@@ -18,8 +18,8 @@ authorization, audit, and recovery behavior owned by the backend.
 - `banyan_content_counters_rebuild`: rebuild denormalized like/favorite counters for one content item.
 - `banyan_content_counters_rebuild_published`: rebuild denormalized like/favorite counters for a bounded page of published content.
 - `banyan_content_feed_rebuild_public`: rebuild Redis public feed projection for posts and Skill shares.
-- `banyan_reaction_cache_rebuild`: rebuild Redis reaction counters for one content item.
-- `banyan_reaction_cache_rebuild_published`: rebuild Redis reaction counters for a bounded page of published content.
+- `banyan_reaction_cache_rebuild`: rebuild Redis reaction bitmap/cache state for one content item.
+- `banyan_reaction_cache_rebuild_published`: rebuild Redis reaction bitmap/cache state for a bounded page of published content.
 - `banyan_content_reindex`: reindex one content item into Elasticsearch.
 - `banyan_content_index_inspect`: inspect whether the configured Elasticsearch content index exists and how many documents it contains.
 - `banyan_content_index_ensure`: create the Elasticsearch content index if it is missing.
@@ -41,4 +41,11 @@ authorization, audit, and recovery behavior owned by the backend.
   config:
     baseUrl: http://127.0.0.1:8080/api/v1
     authTokenEnv: BANYAN_API_TOKEN
+    approvalTokenEnv: BANYAN_OPS_APPROVAL_TOKEN
 ```
+
+Read-only tools use GET endpoints and do not need an ops approval token.
+Mutation tools use audited POST endpoints. When Banyan Server enables
+`banyan.ops.mutation-approval.required`, the tool package sends
+`X-Banyan-Ops-Approval` from `approvalToken` or `approvalTokenEnv`; without it
+the server returns 403 and records a rejected ops audit entry.

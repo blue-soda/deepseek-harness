@@ -23,6 +23,10 @@ export interface Config {
   readonly authToken?: string
   /** Environment variable that may hold a bearer token when `authToken` is absent. */
   readonly authTokenEnv?: string
+  /** Optional approval token for Banyan Server ops mutation APIs. */
+  readonly approvalToken?: string
+  /** Environment variable that may hold the ops approval token when `approvalToken` is absent. */
+  readonly approvalTokenEnv?: string
   /** HTTP request timeout in milliseconds. */
   readonly timeoutMs?: number
   /** Register read-only server status. */
@@ -79,6 +83,8 @@ export const Config: z<Config> = z.object({
   baseUrl: z.string().default('http://127.0.0.1:8080/api/v1'),
   authToken: z.string(),
   authTokenEnv: z.string().default('BANYAN_API_TOKEN'),
+  approvalToken: z.string(),
+  approvalTokenEnv: z.string().default('BANYAN_OPS_APPROVAL_TOKEN'),
   timeoutMs: z.number().step(1).min(1).default(10_000),
   status: z.boolean().default(true),
   health: z.boolean().default(true),
@@ -110,6 +116,8 @@ interface ResolvedConfig {
   readonly baseUrl: string
   readonly authToken?: string
   readonly authTokenEnv: string
+  readonly approvalToken?: string
+  readonly approvalTokenEnv: string
   readonly timeoutMs: number
   readonly status: boolean
   readonly health: boolean
@@ -169,6 +177,7 @@ const PROMPT_TEXT =
   + 'Use banyan_knowledge_index_inspect before knowledge/RAG index maintenance, banyan_knowledge_index_ensure if the knowledge index may be missing, banyan_knowledge_reindex_document for one stale document, and banyan_knowledge_reindex_documents after Elasticsearch resets or ingestion outages. '
   + 'Use banyan_upload_cleanup to abandon expired pending upload objects and free stale local object files. '
   + 'Use banyan_outbox_failed_recent when ops status reports failed outbox projections, banyan_outbox_retry_failed to retry those failures, and banyan_outbox_replay to replay stored outbox events after broader consumer outages or local test resets. '
+  + 'Mutation tools call audited POST endpoints and may require the configured X-Banyan-Ops-Approval token on Banyan Server; missing approval is a server-side refusal, not a reason to bypass the API. '
   + 'Do not bypass these tools by accessing the database directly unless the user explicitly asks for low-level diagnosis.'
 
 /** Register enabled Banyan Server tools. */
@@ -709,6 +718,10 @@ async function requestJson(config: ResolvedConfig, options: RequestOptions): Pro
   if (token !== undefined && token.length > 0) {
     headers.authorization = `Bearer ${token}`
   }
+  const approvalToken = config.approvalToken ?? process.env[config.approvalTokenEnv]
+  if (method !== 'GET' && approvalToken !== undefined && approvalToken.length > 0) {
+    headers['x-banyan-ops-approval'] = approvalToken
+  }
 
   const controller = new AbortController()
   const started = Date.now()
@@ -779,6 +792,7 @@ function requireString(args: unknown, key: string): string {
 function resolveConfig(config: Config): ResolvedConfig {
   const baseUrl = config.baseUrl ?? 'http://127.0.0.1:8080/api/v1'
   const authTokenEnv = config.authTokenEnv ?? 'BANYAN_API_TOKEN'
+  const approvalTokenEnv = config.approvalTokenEnv ?? 'BANYAN_OPS_APPROVAL_TOKEN'
   const timeoutMs = config.timeoutMs ?? 10_000
   if (!Number.isInteger(timeoutMs) || timeoutMs < 1) {
     throw new TypeError('tool-banyan-ops: timeoutMs must be a positive integer')
@@ -787,6 +801,8 @@ function resolveConfig(config: Config): ResolvedConfig {
     baseUrl,
     ...config.authToken !== undefined ? { authToken: config.authToken } : {},
     authTokenEnv,
+    ...config.approvalToken !== undefined ? { approvalToken: config.approvalToken } : {},
+    approvalTokenEnv,
     timeoutMs,
     status: config.status ?? true,
     health: config.health ?? true,
