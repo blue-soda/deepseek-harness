@@ -11,6 +11,7 @@ authorization, audit, and recovery behavior owned by the backend.
 - `banyan_ops_status`: read entity counts and infrastructure status.
 - `banyan_content_search`: search shared content through Banyan Search.
 - `banyan_reaction_cache_rebuild`: rebuild Redis reaction counters for one content item.
+- `banyan_reaction_cache_rebuild_published`: rebuild Redis reaction counters for a bounded page of published content.
 - `banyan_content_reindex`: reindex one content item into Elasticsearch.
 - `banyan_content_index_ensure`: create the Elasticsearch content index if it is missing.
 - `banyan_content_reindex_published`: bulk reindex a bounded page of published content.

@@ -31,6 +31,8 @@ export interface Config {
   readonly contentSearch?: boolean
   /** Register Redis reaction cache rebuild action. */
   readonly rebuildReactionCache?: boolean
+  /** Register bounded Redis reaction cache rebuild action for published content. */
+  readonly rebuildPublishedReactionCaches?: boolean
   /** Register Elasticsearch content reindex action. */
   readonly reindexContent?: boolean
   /** Register Elasticsearch content index ensure action. */
@@ -53,6 +55,7 @@ export const Config: z<Config> = z.object({
   status: z.boolean().default(true),
   contentSearch: z.boolean().default(true),
   rebuildReactionCache: z.boolean().default(true),
+  rebuildPublishedReactionCaches: z.boolean().default(true),
   reindexContent: z.boolean().default(true),
   ensureContentIndex: z.boolean().default(true),
   reindexPublishedContent: z.boolean().default(true),
@@ -69,6 +72,7 @@ interface ResolvedConfig {
   readonly status: boolean
   readonly contentSearch: boolean
   readonly rebuildReactionCache: boolean
+  readonly rebuildPublishedReactionCaches: boolean
   readonly reindexContent: boolean
   readonly ensureContentIndex: boolean
   readonly reindexPublishedContent: boolean
@@ -103,7 +107,7 @@ const PROMPT_TEXT =
   'Use Banyan ops tools to inspect and repair the Banyan backend through its audited HTTP API. '
   + 'banyan_ops_status is read-only and should be called before maintenance. '
   + 'banyan_content_search searches public/friend/self content through the server search layer, backed by Elasticsearch when enabled. '
-  + 'Use banyan_reaction_cache_rebuild only when Redis reaction counters may be stale, and banyan_content_reindex only when a content item is missing or stale in Elasticsearch. '
+  + 'Use banyan_reaction_cache_rebuild for one stale content item, banyan_reaction_cache_rebuild_published after Redis cache loss, and banyan_content_reindex only when a content item is missing or stale in Elasticsearch. '
   + 'Use banyan_content_index_ensure before Elasticsearch maintenance if the content index may be missing, and banyan_content_reindex_published to rebuild a bounded page of published content. '
   + 'Use banyan_upload_cleanup to abandon expired pending upload objects and free stale local object files. '
   + 'Use banyan_outbox_retry_failed when ops status reports failed outbox projections, and banyan_outbox_replay to replay stored outbox events after broader consumer outages or local test resets. '
@@ -121,6 +125,7 @@ export function apply(ctx: Context, config: Config): void {
   if (resolved.status) registerOpsStatus(ctx, resolved)
   if (resolved.contentSearch) registerContentSearch(ctx, resolved)
   if (resolved.rebuildReactionCache) registerReactionCacheRebuild(ctx, resolved)
+  if (resolved.rebuildPublishedReactionCaches) registerPublishedReactionCacheRebuild(ctx, resolved)
   if (resolved.reindexContent) registerContentReindex(ctx, resolved)
   if (resolved.ensureContentIndex) registerContentIndexEnsure(ctx, resolved)
   if (resolved.reindexPublishedContent) registerPublishedContentReindex(ctx, resolved)
@@ -191,6 +196,29 @@ function registerReactionCacheRebuild(ctx: Context, config: ResolvedConfig): voi
       }))
     },
     presentCall: args => ({ card: 'generic', title: 'Rebuild Banyan reaction cache', kind: 'edit', rawInput: args }),
+  }))
+}
+
+function registerPublishedReactionCacheRebuild(ctx: Context, config: ResolvedConfig): void {
+  ctx.tools.register(defineTool({
+    name: 'banyan_reaction_cache_rebuild_published',
+    description: 'Rebuild Redis reaction bitmap/cache data for a bounded page of published Banyan content from authoritative database reactions. Use after Redis cache loss or a local reset.',
+    parameters: {
+      limit: { type: 'integer', description: 'Maximum published content rows to scan. Defaults to 200, maximum enforced by Banyan Server.' },
+    },
+    output: TEXT_OUTPUT,
+    timeoutMs: config.timeoutMs,
+    execute: async (args) => {
+      const query = args as Record<string, unknown>
+      return formatHttpResult(await requestJson(config, {
+        method: 'POST',
+        path: '/ops/reactions/rebuild-published',
+        query: {
+          limit: readLimit(query.limit, 200),
+        },
+      }))
+    },
+    presentCall: args => ({ card: 'generic', title: 'Rebuild published Banyan reaction caches', kind: 'edit', rawInput: args }),
   }))
 }
 
@@ -411,6 +439,7 @@ function resolveConfig(config: Config): ResolvedConfig {
     status: config.status ?? true,
     contentSearch: config.contentSearch ?? true,
     rebuildReactionCache: config.rebuildReactionCache ?? true,
+    rebuildPublishedReactionCaches: config.rebuildPublishedReactionCaches ?? true,
     reindexContent: config.reindexContent ?? true,
     ensureContentIndex: config.ensureContentIndex ?? true,
     reindexPublishedContent: config.reindexPublishedContent ?? true,
