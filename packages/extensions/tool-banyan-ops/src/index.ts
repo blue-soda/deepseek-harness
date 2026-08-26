@@ -33,6 +33,8 @@ export interface Config {
   readonly rebuildReactionCache?: boolean
   /** Register Elasticsearch content reindex action. */
   readonly reindexContent?: boolean
+  /** Register expired pending upload cleanup action. */
+  readonly cleanupExpiredUploads?: boolean
 }
 
 export const Config: z<Config> = z.object({
@@ -44,6 +46,7 @@ export const Config: z<Config> = z.object({
   contentSearch: z.boolean().default(true),
   rebuildReactionCache: z.boolean().default(true),
   reindexContent: z.boolean().default(true),
+  cleanupExpiredUploads: z.boolean().default(true),
 })
 
 interface ResolvedConfig {
@@ -55,6 +58,7 @@ interface ResolvedConfig {
   readonly contentSearch: boolean
   readonly rebuildReactionCache: boolean
   readonly reindexContent: boolean
+  readonly cleanupExpiredUploads: boolean
 }
 
 interface RequestOptions {
@@ -84,6 +88,7 @@ const PROMPT_TEXT =
   + 'banyan_ops_status is read-only and should be called before maintenance. '
   + 'banyan_content_search searches public/friend/self content through the server search layer, backed by Elasticsearch when enabled. '
   + 'Use banyan_reaction_cache_rebuild only when Redis reaction counters may be stale, and banyan_content_reindex only when a content item is missing or stale in Elasticsearch. '
+  + 'Use banyan_upload_cleanup to abandon expired pending upload objects and free stale local object files. '
   + 'Do not bypass these tools by accessing the database directly unless the user explicitly asks for low-level diagnosis.'
 
 /** Register enabled Banyan Server tools. */
@@ -99,6 +104,7 @@ export function apply(ctx: Context, config: Config): void {
   if (resolved.contentSearch) registerContentSearch(ctx, resolved)
   if (resolved.rebuildReactionCache) registerReactionCacheRebuild(ctx, resolved)
   if (resolved.reindexContent) registerContentReindex(ctx, resolved)
+  if (resolved.cleanupExpiredUploads) registerUploadCleanup(ctx, resolved)
 }
 
 function registerOpsStatus(ctx: Context, config: ResolvedConfig): void {
@@ -183,6 +189,29 @@ function registerContentReindex(ctx: Context, config: ResolvedConfig): void {
       }))
     },
     presentCall: args => ({ card: 'generic', title: 'Reindex Banyan content', kind: 'edit', rawInput: args }),
+  }))
+}
+
+function registerUploadCleanup(ctx: Context, config: ResolvedConfig): void {
+  ctx.tools.register(defineTool({
+    name: 'banyan_upload_cleanup',
+    description: 'Abandon expired pending Banyan upload objects and delete any stale local dev-upload files. Use when storage grows unexpectedly or ops status shows many pending uploads.',
+    parameters: {
+      limit: { type: 'integer', description: 'Maximum expired pending upload objects to scan. Defaults to 200, maximum enforced by Banyan Server.' },
+    },
+    output: TEXT_OUTPUT,
+    timeoutMs: config.timeoutMs,
+    execute: async (args) => {
+      const query = args as Record<string, unknown>
+      return formatHttpResult(await requestJson(config, {
+        method: 'POST',
+        path: '/ops/uploads/abandon-expired',
+        query: {
+          limit: readLimit(query.limit),
+        },
+      }))
+    },
+    presentCall: args => ({ card: 'generic', title: 'Clean Banyan expired uploads', kind: 'edit', rawInput: args }),
   }))
 }
 
@@ -277,5 +306,6 @@ function resolveConfig(config: Config): ResolvedConfig {
     contentSearch: config.contentSearch ?? true,
     rebuildReactionCache: config.rebuildReactionCache ?? true,
     reindexContent: config.reindexContent ?? true,
+    cleanupExpiredUploads: config.cleanupExpiredUploads ?? true,
   }
 }
