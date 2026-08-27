@@ -14,7 +14,7 @@
 // lifecycle updates replace only their own row without remounting it.
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import type { ConversationTimelineSnapshot } from '@deepseek-ai/dsh-client-runtime/client'
+import type { ChatConversationViewNode, ConversationNode, ConversationTimelineSnapshot } from '@deepseek-ai/dsh-client-runtime/client'
 import { Button, IconChevronDownOutline14, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ChatViewSlotProps, RenderMessageImages } from '../contract/slots.ts'
 import { PendingSteeringBubble } from './MessageItem.tsx'
@@ -115,9 +115,19 @@ function runningTurnStartTime(timeline: ConversationTimelineSnapshot): number | 
   return latest
 }
 
-function assistantNodeHasVisibleContent(node: ReturnType<ConversationTimelineSnapshot['chat']['nodes']['get']>): boolean {
-  if (node?.kind !== 'assistant-step') return false
-  return node.data.blocks.some((block) => {
+function assistantNodeData(node: ChatConversationViewNode | undefined): Extract<ConversationNode, { kind: 'assistant' }> | null {
+  if (node?.kind !== 'assistant-step') return null
+  const data = node.data
+  if (typeof data !== 'object' || data === null) return null
+  if ((data as { kind?: unknown }).kind !== 'assistant') return null
+  if (!Array.isArray((data as { blocks?: unknown }).blocks)) return null
+  return data as Extract<ConversationNode, { kind: 'assistant' }>
+}
+
+function assistantNodeHasVisibleContent(node: ChatConversationViewNode | undefined): boolean {
+  const data = assistantNodeData(node)
+  if (data === null) return false
+  return data.blocks.some((block) => {
     if (block.kind === 'tool-call') return false
     if ('text' in block && typeof block.text === 'string') return block.text.trim() !== ''
     return true
@@ -255,7 +265,9 @@ export function ChatView({
     for (const key of order) {
       const node = nodeStore.get(key)
       if (!assistantNodeHasVisibleContent(node)) continue
-      const turn = node.data.turn
+      const data = assistantNodeData(node)
+      if (data === null) continue
+      const turn = data.turn
       if (seen.has(turn)) continue
       seen.add(turn)
       first.add(key)

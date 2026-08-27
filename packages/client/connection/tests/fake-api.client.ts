@@ -96,6 +96,32 @@ export class FakeApiClient implements IApiClient {
 
   onCreateDirectory: (payload: unknown) => Promise<RpcResponse<{ path: string }>> =
     () => Promise.resolve(ok({ path: '/home/fake/new' }))
+  onCopyDirectory: (payload: unknown) => Promise<RpcResponse<{
+    sourcePath: string
+    targetPath: string
+    copiedFiles: number
+    copiedDirectories: number
+    skippedEntries: number
+  }>> =
+    () => Promise.resolve(ok({
+      sourcePath: '/home/fake/source',
+      targetPath: '/home/fake/target',
+      copiedFiles: 0,
+      copiedDirectories: 0,
+      skippedEntries: 0,
+    }))
+  onInstallBanyanSkillPackage: (payload: unknown) => Promise<RpcResponse<{
+    targetRootPath: string
+    installedPath: string
+    writtenFiles: number
+    skippedFiles: number
+  }>> =
+    () => Promise.resolve(ok({
+      targetRootPath: '/home/fake/skills',
+      installedPath: '/home/fake/skills/fake',
+      writtenFiles: 0,
+      skippedFiles: 0,
+    }))
 
   private readonly muxConns: StreamConn<MuxFrame>[] = []
   private readonly hostConns: StreamConn<HostFrame>[] = []
@@ -146,6 +172,8 @@ export class FakeApiClient implements IApiClient {
     pickDirectory: payload => this.record('host.pickDirectory', payload, this.onPickDirectory(payload)),
     listDirectory: payload => this.record('host.listDirectory', payload, this.onListDirectory(payload)),
     createDirectory: payload => this.record('host.createDirectory', payload, this.onCreateDirectory(payload)),
+    copyDirectory: payload => this.record('host.copyDirectory', payload, this.onCopyDirectory(payload)),
+    installBanyanSkillPackage: payload => this.record('host.installBanyanSkillPackage', payload, this.onInstallBanyanSkillPackage(payload)),
     openPath: payload => this.record('host.openPath', payload, this.onOpenPath(payload)),
   }
 
@@ -184,6 +212,8 @@ export class FakeApiClient implements IApiClient {
       this.record('agentPreset.read', payload, Promise.resolve(ok({
         agentPreset: payload.agentPreset, trust: 'user' as const, content: '',
       }))),
+    write: (payload: { agentPreset: string }) =>
+      this.record('agentPreset.write', payload, Promise.resolve(ok({ agentPreset: payload.agentPreset }))),
     copy: (payload: { agentPreset: string }) =>
       this.record('agentPreset.copy', payload, Promise.resolve(ok({ agentPreset: payload.agentPreset }))),
     openDocument: (payload: { agentPreset: string }) =>
