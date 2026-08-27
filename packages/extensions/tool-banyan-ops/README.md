@@ -13,6 +13,7 @@ authorization, audit, and recovery behavior owned by the backend.
 - `banyan_kafka_lag`: inspect Kafka consumer-group lag for the Banyan outbox projection topic.
 - `banyan_ops_audit_recent`: read recent audited maintenance actions.
 - `banyan_content_search`: search shared content through Banyan Search.
+- `banyan_content_cache_inspect`: inspect one Redis content detail cache entry without mutating it.
 - `banyan_content_cache_evict`: evict one content detail cache entry.
 - `banyan_content_cache_warm`: rebuild one content detail cache entry from the database.
 - `banyan_content_counters_rebuild`: rebuild denormalized like/favorite counters for one content item.
@@ -20,6 +21,7 @@ authorization, audit, and recovery behavior owned by the backend.
 - `banyan_content_feed_rebuild_public`: rebuild Redis public feed projection for posts and Skill shares.
 - `banyan_social_user_stats_rebuild`: rebuild one user's social stats projection, including friend count.
 - `banyan_social_group_stats_rebuild`: rebuild one group's social stats projection, including member count.
+- `banyan_reaction_cache_inspect`: inspect one Redis reaction cache entry without mutating it.
 - `banyan_reaction_cache_rebuild`: rebuild Redis reaction bitmap/cache state for one content item.
 - `banyan_reaction_cache_rebuild_published`: rebuild Redis reaction bitmap/cache state for a bounded page of published content.
 - `banyan_content_reindex`: reindex one content item into Elasticsearch.

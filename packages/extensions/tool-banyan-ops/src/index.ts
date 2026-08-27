@@ -41,10 +41,14 @@ export interface Config {
   readonly contentSearch?: boolean
   /** Register Redis reaction cache rebuild action. */
   readonly rebuildReactionCache?: boolean
+  /** Register read-only Redis reaction cache inspection. */
+  readonly inspectReactionCache?: boolean
   /** Register bounded Redis reaction cache rebuild action for published content. */
   readonly rebuildPublishedReactionCaches?: boolean
   /** Register Redis content detail cache eviction action. */
   readonly evictContentCache?: boolean
+  /** Register read-only Redis content detail cache inspection. */
+  readonly inspectContentCache?: boolean
   /** Register Redis content detail cache warm action. */
   readonly warmContentCache?: boolean
   /** Register denormalized content reaction counter rebuild action. */
@@ -96,8 +100,10 @@ export const Config: z<Config> = z.object({
   auditRecent: z.boolean().default(true),
   contentSearch: z.boolean().default(true),
   rebuildReactionCache: z.boolean().default(true),
+  inspectReactionCache: z.boolean().default(true),
   rebuildPublishedReactionCaches: z.boolean().default(true),
   evictContentCache: z.boolean().default(true),
+  inspectContentCache: z.boolean().default(true),
   warmContentCache: z.boolean().default(true),
   rebuildContentCounters: z.boolean().default(true),
   rebuildPublishedContentCounters: z.boolean().default(true),
@@ -131,8 +137,10 @@ interface ResolvedConfig {
   readonly auditRecent: boolean
   readonly contentSearch: boolean
   readonly rebuildReactionCache: boolean
+  readonly inspectReactionCache: boolean
   readonly rebuildPublishedReactionCaches: boolean
   readonly evictContentCache: boolean
+  readonly inspectContentCache: boolean
   readonly warmContentCache: boolean
   readonly rebuildContentCounters: boolean
   readonly rebuildPublishedContentCounters: boolean
@@ -179,7 +187,7 @@ const PROMPT_TEXT =
   'Use Banyan ops tools to inspect and repair the Banyan backend through its audited HTTP API. '
   + 'banyan_ops_status is read-only and should be called before maintenance; banyan_ops_health actively checks Redis, Elasticsearch, and Kafka connectivity; banyan_kafka_lag inspects consumer lag for the Canal/Kafka projection topic; banyan_ops_audit_recent shows who recently ran maintenance actions. '
   + 'banyan_content_search searches public/friend/self content through the server search layer, backed by Elasticsearch when enabled. '
-  + 'Use banyan_content_cache_evict or banyan_content_cache_warm for stale content details, banyan_content_counters_rebuild for stale denormalized like/favorite counts, banyan_reaction_cache_rebuild for one stale Redis reaction bitmap, banyan_reaction_cache_rebuild_published after Redis cache loss, and banyan_content_reindex only when a content item is missing or stale in Elasticsearch. '
+  + 'Use banyan_content_cache_inspect and banyan_reaction_cache_inspect before cache repair when possible; use banyan_content_cache_evict or banyan_content_cache_warm for stale content details, banyan_content_counters_rebuild for stale denormalized like/favorite counts, banyan_reaction_cache_rebuild for one stale Redis reaction bitmap, banyan_reaction_cache_rebuild_published after Redis cache loss, and banyan_content_reindex only when a content item is missing or stale in Elasticsearch. '
   + 'Use banyan_content_feed_rebuild_public when the public sharing feed is empty or out of order after Redis loss or projection outages. '
   + 'Use banyan_social_user_stats_rebuild or banyan_social_group_stats_rebuild when friend counts or group member counts look stale after conversation/friend/group events. '
   + 'Use banyan_content_index_inspect before Elasticsearch maintenance to check whether the content index exists and how many documents it contains, banyan_content_index_ensure if the index may be missing, and banyan_content_reindex_published to rebuild a bounded page of published content. '
@@ -204,8 +212,10 @@ export function apply(ctx: Context, config: Config): void {
   if (resolved.auditRecent) registerOpsAuditRecent(ctx, resolved)
   if (resolved.contentSearch) registerContentSearch(ctx, resolved)
   if (resolved.rebuildReactionCache) registerReactionCacheRebuild(ctx, resolved)
+  if (resolved.inspectReactionCache) registerReactionCacheInspect(ctx, resolved)
   if (resolved.rebuildPublishedReactionCaches) registerPublishedReactionCacheRebuild(ctx, resolved)
   if (resolved.evictContentCache) registerContentCacheEvict(ctx, resolved)
+  if (resolved.inspectContentCache) registerContentCacheInspect(ctx, resolved)
   if (resolved.warmContentCache) registerContentCacheWarm(ctx, resolved)
   if (resolved.rebuildContentCounters) registerContentCountersRebuild(ctx, resolved)
   if (resolved.rebuildPublishedContentCounters) registerPublishedContentCountersRebuild(ctx, resolved)
@@ -352,6 +362,31 @@ function registerReactionCacheRebuild(ctx: Context, config: ResolvedConfig): voi
   }))
 }
 
+function registerReactionCacheInspect(ctx: Context, config: ResolvedConfig): void {
+  ctx.tools.register(defineTool({
+    name: 'banyan_reaction_cache_inspect',
+    description: 'Read Redis reaction-cache metadata for one Banyan content item: enabled/available state, count-key presence, cached like/favorite counts, bitmap sizing, and optional viewer bitmap state. Use before rebuilding reaction cache.',
+    parameters: {
+      contentId: { type: 'string', required: true, description: 'Banyan shared content ID.' },
+      viewerUserId: { type: 'string', description: 'Optional Banyan internal user id to inspect viewer like/favorite bitmap bits.' },
+    },
+    output: TEXT_OUTPUT,
+    timeoutMs: config.timeoutMs,
+    isConcurrencySafe: () => true,
+    execute: async (args) => {
+      const contentId = requireString(args, 'contentId')
+      const query = args as Record<string, unknown>
+      return formatHttpResult(await requestJson(config, {
+        path: `/ops/reactions/${encodeURIComponent(contentId)}/inspect-cache`,
+        query: {
+          viewerUserId: typeof query.viewerUserId === 'string' && query.viewerUserId.length > 0 ? query.viewerUserId : undefined,
+        },
+      }))
+    },
+    presentCall: args => ({ card: 'generic', title: 'Inspect Banyan reaction cache', kind: 'read', rawInput: args }),
+  }))
+}
+
 function registerPublishedReactionCacheRebuild(ctx: Context, config: ResolvedConfig): void {
   ctx.tools.register(defineTool({
     name: 'banyan_reaction_cache_rebuild_published',
@@ -392,6 +427,26 @@ function registerContentCacheEvict(ctx: Context, config: ResolvedConfig): void {
       }))
     },
     presentCall: args => ({ card: 'generic', title: 'Evict Banyan content cache', kind: 'edit', rawInput: args }),
+  }))
+}
+
+function registerContentCacheInspect(ctx: Context, config: ResolvedConfig): void {
+  ctx.tools.register(defineTool({
+    name: 'banyan_content_cache_inspect',
+    description: 'Read Redis content-detail cache metadata for one Banyan content item: enabled/available state, key, presence, TTL, and cached JSON byte size. Use before evicting or warming content cache.',
+    parameters: {
+      contentId: { type: 'string', required: true, description: 'Banyan shared content ID.' },
+    },
+    output: TEXT_OUTPUT,
+    timeoutMs: config.timeoutMs,
+    isConcurrencySafe: () => true,
+    execute: async (args) => {
+      const contentId = requireString(args, 'contentId')
+      return formatHttpResult(await requestJson(config, {
+        path: `/ops/cache/contents/${encodeURIComponent(contentId)}/inspect`,
+      }))
+    },
+    presentCall: args => ({ card: 'generic', title: 'Inspect Banyan content cache', kind: 'read', rawInput: args }),
   }))
 }
 
@@ -861,8 +916,10 @@ function resolveConfig(config: Config): ResolvedConfig {
     auditRecent: config.auditRecent ?? true,
     contentSearch: config.contentSearch ?? true,
     rebuildReactionCache: config.rebuildReactionCache ?? true,
+    inspectReactionCache: config.inspectReactionCache ?? true,
     rebuildPublishedReactionCaches: config.rebuildPublishedReactionCaches ?? true,
     evictContentCache: config.evictContentCache ?? true,
+    inspectContentCache: config.inspectContentCache ?? true,
     warmContentCache: config.warmContentCache ?? true,
     rebuildContentCounters: config.rebuildContentCounters ?? true,
     rebuildPublishedContentCounters: config.rebuildPublishedContentCounters ?? true,
