@@ -374,4 +374,12 @@ export interface SessionsApi {
    */
   cancel(request: RpcRequest<{ sessionId: SessionId }>): Promise<RpcResponse<{ accepted: true }>>
 
+  /**
+   * Disposes a live session on the host: removes the session store entry and
+   * emits `session/disposed`, so the conversation disappears from the host and
+   * clients receive `host/session-removed`. A session not live (not attached)
+   * fails with `session-not-found`.
+   */
+  delete(request: RpcRequest<{ sessionId: SessionId }>): Promise<RpcResponse<{ deleted: boolean }>>
+
 }

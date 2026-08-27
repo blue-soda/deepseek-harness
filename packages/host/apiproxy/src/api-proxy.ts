@@ -2532,6 +2532,21 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
         agent.cancel({ kind: 'user' }, { keepInbox: true })
         return Promise.resolve(ok(request, { accepted: true as const }))
       },
+
+      delete(request) {
+        const { sessionId } = request.payload
+        if (ctx.sessions.get(sessionId) === undefined) {
+          return Promise.resolve(err(request, {
+            code: 'session-not-found',
+            message: `session "${sessionId}" not found (not attached)`,
+            details: { sessionId },
+          }))
+        }
+        // Disposes the live session store entry and (when announced) emits the
+        // `session/disposed` edge, so clients receive `host/session-removed`.
+        ctx.sessions.dispose(sessionId)
+        return Promise.resolve(ok(request, { deleted: true as const }))
+      },
     },
 
     subagents: {

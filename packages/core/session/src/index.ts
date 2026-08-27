@@ -1065,6 +1065,20 @@ export class SessionStore extends Service {
   }
 
   /**
+   * Dispose one live session by id and emit its paired disposal. The session's
+   * entry detach removes the store row and, when announced, publishes the
+   * `session/disposed` edge (so `host/session-removed` reaches clients).
+   * @param id - the session id to dispose.
+   * @returns true when a live entry was found and detached; false otherwise.
+   */
+  dispose(id: SessionId): boolean {
+    const entry = this.store.get(id)
+    if (entry === undefined) return false
+    entry.detach()
+    return true
+  }
+
+  /**
    * Create a live child session from a stable prefix of a live source.
    * `boundary` is an inclusive source event seq; omitted means the source's
    * current last event. The selected slice may end with a between-turn event
