@@ -18,6 +18,8 @@ authorization, audit, and recovery behavior owned by the backend.
 - `banyan_content_counters_rebuild`: rebuild denormalized like/favorite counters for one content item.
 - `banyan_content_counters_rebuild_published`: rebuild denormalized like/favorite counters for a bounded page of published content.
 - `banyan_content_feed_rebuild_public`: rebuild Redis public feed projection for posts and Skill shares.
+- `banyan_social_user_stats_rebuild`: rebuild one user's social stats projection, including friend count.
+- `banyan_social_group_stats_rebuild`: rebuild one group's social stats projection, including member count.
 - `banyan_reaction_cache_rebuild`: rebuild Redis reaction bitmap/cache state for one content item.
 - `banyan_reaction_cache_rebuild_published`: rebuild Redis reaction bitmap/cache state for a bounded page of published content.
 - `banyan_content_reindex`: reindex one content item into Elasticsearch.

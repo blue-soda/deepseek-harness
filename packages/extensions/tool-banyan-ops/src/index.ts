@@ -53,6 +53,10 @@ export interface Config {
   readonly rebuildPublishedContentCounters?: boolean
   /** Register Redis public feed projection rebuild action. */
   readonly rebuildPublicFeed?: boolean
+  /** Register user social stats rebuild action. */
+  readonly rebuildUserSocialStats?: boolean
+  /** Register group social stats rebuild action. */
+  readonly rebuildGroupSocialStats?: boolean
   /** Register Elasticsearch content reindex action. */
   readonly reindexContent?: boolean
   /** Register Elasticsearch content index ensure action. */
@@ -98,6 +102,8 @@ export const Config: z<Config> = z.object({
   rebuildContentCounters: z.boolean().default(true),
   rebuildPublishedContentCounters: z.boolean().default(true),
   rebuildPublicFeed: z.boolean().default(true),
+  rebuildUserSocialStats: z.boolean().default(true),
+  rebuildGroupSocialStats: z.boolean().default(true),
   reindexContent: z.boolean().default(true),
   ensureContentIndex: z.boolean().default(true),
   inspectContentIndex: z.boolean().default(true),
@@ -131,6 +137,8 @@ interface ResolvedConfig {
   readonly rebuildContentCounters: boolean
   readonly rebuildPublishedContentCounters: boolean
   readonly rebuildPublicFeed: boolean
+  readonly rebuildUserSocialStats: boolean
+  readonly rebuildGroupSocialStats: boolean
   readonly reindexContent: boolean
   readonly ensureContentIndex: boolean
   readonly inspectContentIndex: boolean
@@ -173,6 +181,7 @@ const PROMPT_TEXT =
   + 'banyan_content_search searches public/friend/self content through the server search layer, backed by Elasticsearch when enabled. '
   + 'Use banyan_content_cache_evict or banyan_content_cache_warm for stale content details, banyan_content_counters_rebuild for stale denormalized like/favorite counts, banyan_reaction_cache_rebuild for one stale Redis reaction bitmap, banyan_reaction_cache_rebuild_published after Redis cache loss, and banyan_content_reindex only when a content item is missing or stale in Elasticsearch. '
   + 'Use banyan_content_feed_rebuild_public when the public sharing feed is empty or out of order after Redis loss or projection outages. '
+  + 'Use banyan_social_user_stats_rebuild or banyan_social_group_stats_rebuild when friend counts or group member counts look stale after conversation/friend/group events. '
   + 'Use banyan_content_index_inspect before Elasticsearch maintenance to check whether the content index exists and how many documents it contains, banyan_content_index_ensure if the index may be missing, and banyan_content_reindex_published to rebuild a bounded page of published content. '
   + 'Use banyan_knowledge_index_inspect before knowledge/RAG index maintenance, banyan_knowledge_index_ensure if the knowledge index may be missing, banyan_knowledge_reindex_document for one stale document, and banyan_knowledge_reindex_documents after Elasticsearch resets or ingestion outages. '
   + 'Use banyan_upload_cleanup to abandon expired pending upload objects and free stale local object files. '
@@ -201,6 +210,8 @@ export function apply(ctx: Context, config: Config): void {
   if (resolved.rebuildContentCounters) registerContentCountersRebuild(ctx, resolved)
   if (resolved.rebuildPublishedContentCounters) registerPublishedContentCountersRebuild(ctx, resolved)
   if (resolved.rebuildPublicFeed) registerPublicFeedRebuild(ctx, resolved)
+  if (resolved.rebuildUserSocialStats) registerUserSocialStatsRebuild(ctx, resolved)
+  if (resolved.rebuildGroupSocialStats) registerGroupSocialStatsRebuild(ctx, resolved)
   if (resolved.reindexContent) registerContentReindex(ctx, resolved)
   if (resolved.inspectContentIndex) registerContentIndexInspect(ctx, resolved)
   if (resolved.ensureContentIndex) registerContentIndexEnsure(ctx, resolved)
@@ -469,6 +480,46 @@ function registerPublicFeedRebuild(ctx: Context, config: ResolvedConfig): void {
       }))
     },
     presentCall: args => ({ card: 'generic', title: 'Rebuild Banyan public feed', kind: 'edit', rawInput: args }),
+  }))
+}
+
+function registerUserSocialStatsRebuild(ctx: Context, config: ResolvedConfig): void {
+  ctx.tools.register(defineTool({
+    name: 'banyan_social_user_stats_rebuild',
+    description: 'Rebuild one Banyan user social stats projection, especially friendCount, from authoritative friend relation rows. Use when a profile or social graph count looks stale after Outbox/Canal lag.',
+    parameters: {
+      userId: { type: 'string', description: 'Banyan internal user id, not the public uid.' },
+    },
+    output: TEXT_OUTPUT,
+    timeoutMs: config.timeoutMs,
+    execute: async (args) => {
+      const userId = requireString(args, 'userId')
+      return formatHttpResult(await requestJson(config, {
+        method: 'POST',
+        path: `/ops/social/users/${encodeURIComponent(userId)}/stats/rebuild`,
+      }))
+    },
+    presentCall: args => ({ card: 'generic', title: 'Rebuild Banyan user social stats', kind: 'edit', rawInput: args }),
+  }))
+}
+
+function registerGroupSocialStatsRebuild(ctx: Context, config: ResolvedConfig): void {
+  ctx.tools.register(defineTool({
+    name: 'banyan_social_group_stats_rebuild',
+    description: 'Rebuild one Banyan group social stats projection, especially memberCount, from authoritative conversation participants. Use when group profile counts look stale after Outbox/Canal lag.',
+    parameters: {
+      conversationId: { type: 'string', description: 'Banyan group conversation id.' },
+    },
+    output: TEXT_OUTPUT,
+    timeoutMs: config.timeoutMs,
+    execute: async (args) => {
+      const conversationId = requireString(args, 'conversationId')
+      return formatHttpResult(await requestJson(config, {
+        method: 'POST',
+        path: `/ops/social/groups/${encodeURIComponent(conversationId)}/stats/rebuild`,
+      }))
+    },
+    presentCall: args => ({ card: 'generic', title: 'Rebuild Banyan group social stats', kind: 'edit', rawInput: args }),
   }))
 }
 
@@ -816,6 +867,8 @@ function resolveConfig(config: Config): ResolvedConfig {
     rebuildContentCounters: config.rebuildContentCounters ?? true,
     rebuildPublishedContentCounters: config.rebuildPublishedContentCounters ?? true,
     rebuildPublicFeed: config.rebuildPublicFeed ?? true,
+    rebuildUserSocialStats: config.rebuildUserSocialStats ?? true,
+    rebuildGroupSocialStats: config.rebuildGroupSocialStats ?? true,
     reindexContent: config.reindexContent ?? true,
     inspectContentIndex: config.inspectContentIndex ?? true,
     ensureContentIndex: config.ensureContentIndex ?? true,
