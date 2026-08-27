@@ -81,6 +81,8 @@ export interface Config {
   readonly cleanupExpiredUploads?: boolean
   /** Register outbox projection replay action. */
   readonly replayOutbox?: boolean
+  /** Register read-only grouped outbox diagnostics. */
+  readonly outboxDiagnostics?: boolean
   /** Register read-only recent failed outbox event inspection. */
   readonly failedOutboxRecent?: boolean
   /** Register failed outbox projection retry action. */
@@ -120,6 +122,7 @@ export const Config: z<Config> = z.object({
   reindexKnowledgeDocuments: z.boolean().default(true),
   cleanupExpiredUploads: z.boolean().default(true),
   replayOutbox: z.boolean().default(true),
+  outboxDiagnostics: z.boolean().default(true),
   failedOutboxRecent: z.boolean().default(true),
   retryFailedOutbox: z.boolean().default(true),
 })
@@ -157,6 +160,7 @@ interface ResolvedConfig {
   readonly reindexKnowledgeDocuments: boolean
   readonly cleanupExpiredUploads: boolean
   readonly replayOutbox: boolean
+  readonly outboxDiagnostics: boolean
   readonly failedOutboxRecent: boolean
   readonly retryFailedOutbox: boolean
 }
@@ -193,7 +197,7 @@ const PROMPT_TEXT =
   + 'Use banyan_content_index_inspect before Elasticsearch maintenance to check whether the content index exists and how many documents it contains, banyan_content_index_ensure if the index may be missing, and banyan_content_reindex_published to rebuild a bounded page of published content. '
   + 'Use banyan_knowledge_index_inspect before knowledge/RAG index maintenance, banyan_knowledge_index_ensure if the knowledge index may be missing, banyan_knowledge_reindex_document for one stale document, and banyan_knowledge_reindex_documents after Elasticsearch resets or ingestion outages. '
   + 'Use banyan_upload_cleanup to abandon expired pending upload objects and free stale local object files. '
-  + 'Use banyan_outbox_failed_recent when ops status reports failed outbox projections, banyan_outbox_retry_failed to retry those failures, and banyan_outbox_replay to replay stored outbox events after broader consumer outages or local test resets. '
+  + 'Use banyan_outbox_diagnostics when ops status reports NEW or FAILED outbox projections to group the backlog by aggregate and event type, banyan_outbox_failed_recent for concrete failed rows, banyan_outbox_retry_failed to retry those failures, and banyan_outbox_replay to replay stored outbox events after broader consumer outages or local test resets. '
   + 'Mutation tools call audited POST endpoints and may require the configured X-Banyan-Ops-Approval token on Banyan Server; missing approval is a server-side refusal, not a reason to bypass the API. '
   + 'Do not bypass these tools by accessing the database directly unless the user explicitly asks for low-level diagnosis.'
 
@@ -232,6 +236,7 @@ export function apply(ctx: Context, config: Config): void {
   if (resolved.reindexKnowledgeDocuments) registerKnowledgeDocumentsReindex(ctx, resolved)
   if (resolved.cleanupExpiredUploads) registerUploadCleanup(ctx, resolved)
   if (resolved.replayOutbox) registerOutboxReplay(ctx, resolved)
+  if (resolved.outboxDiagnostics) registerOutboxDiagnostics(ctx, resolved)
   if (resolved.failedOutboxRecent) registerOutboxFailedRecent(ctx, resolved)
   if (resolved.retryFailedOutbox) registerOutboxRetryFailed(ctx, resolved)
 }
@@ -793,6 +798,21 @@ function registerOutboxFailedRecent(ctx: Context, config: ResolvedConfig): void 
   }))
 }
 
+function registerOutboxDiagnostics(ctx: Context, config: ResolvedConfig): void {
+  ctx.tools.register(defineTool({
+    name: 'banyan_outbox_diagnostics',
+    description: 'Read grouped Banyan outbox backlog diagnostics. Returns NEW and FAILED counts grouped by status, aggregate type, and event type so an ops Agent can identify whether Redis, Elasticsearch, notifications, social stats, or another projection lane is stuck.',
+    parameters: {},
+    output: TEXT_OUTPUT,
+    timeoutMs: config.timeoutMs,
+    isConcurrencySafe: () => true,
+    execute: async () => formatHttpResult(await requestJson(config, {
+      path: '/ops/outbox/diagnostics',
+    })),
+    presentCall: args => ({ card: 'generic', title: 'Read Banyan outbox diagnostics', kind: 'read', rawInput: args }),
+  }))
+}
+
 function registerOutboxRetryFailed(ctx: Context, config: ResolvedConfig): void {
   ctx.tools.register(defineTool({
     name: 'banyan_outbox_retry_failed',
@@ -936,6 +956,7 @@ function resolveConfig(config: Config): ResolvedConfig {
     reindexKnowledgeDocuments: config.reindexKnowledgeDocuments ?? true,
     cleanupExpiredUploads: config.cleanupExpiredUploads ?? true,
     replayOutbox: config.replayOutbox ?? true,
+    outboxDiagnostics: config.outboxDiagnostics ?? true,
     failedOutboxRecent: config.failedOutboxRecent ?? true,
     retryFailedOutbox: config.retryFailedOutbox ?? true,
   }

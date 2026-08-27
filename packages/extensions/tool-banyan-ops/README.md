@@ -34,6 +34,7 @@ authorization, audit, and recovery behavior owned by the backend.
 - `banyan_knowledge_reindex_documents`: bulk reindex a bounded page of knowledge documents.
 - `banyan_upload_cleanup`: abandon expired pending upload objects and delete stale local dev-upload files.
 - `banyan_outbox_replay`: replay stored outbox events through Banyan Server projections.
+- `banyan_outbox_diagnostics`: group NEW and FAILED outbox backlog by status, aggregate type, and event type.
 - `banyan_outbox_failed_recent`: inspect recent failed outbox projection rows.
 - `banyan_outbox_retry_failed`: retry only failed outbox projection rows.
 
