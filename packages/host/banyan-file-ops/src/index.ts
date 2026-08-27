@@ -5,7 +5,7 @@
  * @module @blue-soda/dsh-host-banyan-file-ops
  */
 
-import { copyFile, lstat, mkdir, readFile, readdir, readlink, stat, symlink, writeFile } from 'node:fs/promises'
+import { copyFile, lstat, mkdir, readFile, readdir, readlink, stat, symlink, unlink, writeFile } from 'node:fs/promises'
 import { basename, dirname, join, posix, relative, resolve, win32 } from 'node:path'
 import { Context, Service } from '@deepseek-ai/cordis'
 import { resolveDshHome } from '@deepseek-ai/dsh-home-paths'
@@ -61,6 +61,23 @@ export interface InstallBanyanSkillPackageResult {
   installedPath: string
   writtenFiles: number
   skippedFiles: number
+}
+
+export interface PruneDataOptions {
+  /** Which host-local data tree to prune: session logs or the cache storage. */
+  target: 'logs' | 'cache'
+  signal?: AbortSignal
+}
+
+export interface PruneDataResult {
+  /** The resolved host account home the prune ran against. */
+  home: string
+  /** The pruned target, echoed from the request. */
+  target: 'logs' | 'cache'
+  /** Number of regular files deleted. */
+  files: number
+  /** Total bytes freed by the deletions. */
+  bytes: number
 }
 
 export class BanyanFileOpsError extends Error {
@@ -173,11 +190,21 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
+/**
+ * Host-side filesystem operations for Banyan UI plugins (workspace migration, skill
+ * install, and pruning DSH session/state data). These run on the DSH Host, not in the
+ * browser or the Banyan backend.
+ */
 export default class BanyanFileOps extends Service {
   constructor(ctx: Context) {
     super(ctx, 'banyanFileOps')
   }
 
+  /**
+   * Recursively copy a directory tree to a target path, skipping default ignore names.
+   * @param options Copy source/target paths and optional overwrite/skip rules.
+   * @returns Copy counters and the resolved source/target paths.
+   */
   async copyDirectory(options: DirectoryCopyOptions): Promise<DirectoryCopyResult> {
     if (!fullyQualified(options.sourcePath) || !fullyQualified(options.targetPath)) {
       throw new BanyanFileOpsError(
@@ -211,6 +238,11 @@ export default class BanyanFileOps extends Service {
     return { sourcePath, targetPath, ...counters }
   }
 
+  /**
+   * Install a DSH skill package (SKILL.md + files) into the skills root.
+   * @param options Package directory name, SKILL.md, files, and optional target root.
+   * @returns Installed path and written/skipped file counts.
+   */
   async installBanyanSkillPackage(options: InstallBanyanSkillPackageOptions): Promise<InstallBanyanSkillPackageResult> {
     const directoryName = options.directoryName.trim()
     if (!SKILL_DIRECTORY_NAME.test(directoryName) || directoryName === '.' || directoryName === '..') {
@@ -267,5 +299,42 @@ export default class BanyanFileOps extends Service {
       )
     }
     return { targetRootPath, installedPath, writtenFiles, skippedFiles }
+  }
+
+  /**
+   * Delete DSH session logs (target 'logs') or state cache files (target 'cache') under
+   * the DSH home, keeping directories and leaving profiles/settings/skills/workspaces
+   * untouched.
+   * @param request Target ('logs' or 'cache') and an optional abort signal.
+   * @returns Freed file/byte counts and the DSH home.
+   */
+  async pruneData(request: PruneDataOptions): Promise<PruneDataResult> {
+    const home = resolveDshHome()
+    const target = request.target
+    const rootDir = resolve(join(home, target === 'logs' ? 'sessions' : 'storages'))
+    throwIfAborted(request.signal)
+    if (!await directoryExists(rootDir)) {
+      return { home, target, files: 0, bytes: 0 }
+    }
+    let files = 0
+    let bytes = 0
+    const walk = async (dir: string): Promise<void> => {
+      throwIfAborted(request.signal)
+      for (const entry of await readdir(dir, { withFileTypes: true })) {
+        throwIfAborted(request.signal)
+        const fullPath = join(dir, entry.name)
+        if (entry.isDirectory()) {
+          await walk(fullPath)
+          continue
+        }
+        if (!entry.isFile()) continue
+        const size = (await stat(fullPath)).size
+        await unlink(fullPath)
+        files += 1
+        bytes += size
+      }
+    }
+    await walk(rootDir)
+    return { home, target, files, bytes }
   }
 }

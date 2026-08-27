@@ -176,6 +176,11 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         throws: ['when no configured root supplies that id.'],
       },
       {
+        signature: 'async write(id: string, content: string): Promise<void>',
+        description: 'Replace a locally authored preset\'s composition text.',
+        parameters: [{ name: 'id', description: 'the preset id.' }, { name: 'content', description: 'the exact composition text to write.' }],
+      },
+      {
         signature: 'async copy(from: string, id: string, name?: string): Promise<void>',
         description: 'Create a locally authored preset by copying an existing one whole.\n\nCopy is the only authoring write. Composition text never crosses this seam: the source is named by id and its directory is copied as it stands, so the copy is exactly as loadable as its source and authoring grants no capability the roster did not already carry. The copy is NOT mounted to validate — a source that mounts today yields a copy that mounts today.',
         parameters: [{ name: 'from', description: 'the preset the copy starts from; shipped presets are the primary source, so any trust is accepted.' }, { name: 'id', description: 'the new preset\'s id, which becomes its directory name.' }, { name: 'name', description: 'display name for the copy; absent falls back to the id.' }],
@@ -498,6 +503,31 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [{ name: 'request', description: 'the key, the method, the surface, and the cancel signal.' }],
         returns: '`authorized` once the flow\'s record is committed during this attempt and observed, or `cancelled` when the human declined or the caller withdrew.',
         throws: ['{AuthorizationError} code `NO_FLOW` when nothing claims the key, `UNKNOWN_METHOD` when the named method is not one the flow offers, `ALREADY_IN_FLIGHT` when an attempt is already running for the key, or `NOT_COMMITTED` when the flow resolved without committing a record during the attempt.'],
+      },
+    ],
+  },
+  {
+    key: 'banyanFileOps',
+    summary: 'Host-side filesystem operations for Banyan UI plugins (workspace migration, skill install, and pruning DSH session/state data).',
+    description: 'Host-side filesystem operations for Banyan UI plugins (workspace migration, skill install, and pruning DSH session/state data). These run on the DSH Host, not in the browser or the Banyan backend.',
+    methods: [
+      {
+        signature: 'async copyDirectory(options: DirectoryCopyOptions): Promise<DirectoryCopyResult>',
+        description: 'Recursively copy a directory tree to a target path, skipping default ignore names.',
+        parameters: [{ name: 'options', description: 'Copy source/target paths and optional overwrite/skip rules.' }],
+        returns: 'Copy counters and the resolved source/target paths.',
+      },
+      {
+        signature: 'async installBanyanSkillPackage(options: InstallBanyanSkillPackageOptions): Promise<InstallBanyanSkillPackageResult>',
+        description: 'Install a DSH skill package (SKILL.md + files) into the skills root.',
+        parameters: [{ name: 'options', description: 'Package directory name, SKILL.md, files, and optional target root.' }],
+        returns: 'Installed path and written/skipped file counts.',
+      },
+      {
+        signature: 'async pruneData(request: PruneDataOptions): Promise<PruneDataResult>',
+        description: 'Delete DSH session logs (target \'logs\') or state cache files (target \'cache\') under the DSH home, keeping directories and leaving profiles/settings/skills/workspaces untouched.',
+        parameters: [{ name: 'request', description: 'Target (\'logs\' or \'cache\') and an optional abort signal.' }],
+        returns: 'Freed file/byte counts and the DSH home.',
       },
     ],
   },
@@ -1074,6 +1104,31 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Delete one feedback item. Absence is successful regardless of the supplied version; an existing item requires an exact version match.',
         parameters: [{ name: 'request', description: 'Session, message, and observed item version.' }],
         returns: 'the stable absent postcondition, or an explicit failure.',
+      },
+    ],
+  },
+  {
+    key: 'mobile',
+    summary: 'Android bridge capability registry and execution service.',
+    description: 'Android bridge capability registry and execution service.',
+    methods: [
+      {
+        signature: 'registerProvider(provider: AndroidBridgeProvider): () => void',
+        description: 'Register an Android bridge provider.',
+        parameters: [{ name: 'provider', description: 'provider keyed by its `id`.' }],
+        returns: 'disposer that unregisters the provider.',
+      },
+      {
+        signature: 'async health(signal?: AbortSignal): Promise<AndroidBridgeHealth>',
+        description: 'Read Android bridge health from the selected provider.',
+        parameters: [{ name: 'signal', description: 'optional cancellation signal.' }],
+        returns: 'Android bridge health.',
+      },
+      {
+        signature: 'async execute(request: AndroidToolRequest, signal?: AbortSignal): Promise<AndroidToolResponse>',
+        description: 'Execute one Android bridge tool through the selected provider.',
+        parameters: [{ name: 'request', description: 'Android bridge request.' }, { name: 'signal', description: 'optional cancellation signal.' }],
+        returns: 'Android bridge response.',
       },
     ],
   },
@@ -2882,6 +2937,34 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type AgentStatus = \'idle\' | \'running\';',
   },
   {
+    name: 'AndroidBridgeHealth',
+    declaration: 'export interface AndroidBridgeHealth {\n    readonly status: \'stopped\' | \'listening\' | \'connected\' | \'error\';\n    readonly version: string;\n    readonly tools: readonly AndroidToolDefinition[];\n}',
+  },
+  {
+    name: 'AndroidBridgeProvider',
+    declaration: 'export interface AndroidBridgeProvider {\n    readonly id: string;\n    available(): boolean;\n    health(signal?: AbortSignal): Promise<AndroidBridgeHealth>;\n    execute(request: AndroidToolRequest, signal?: AbortSignal): Promise<AndroidToolResponse>;\n}',
+  },
+  {
+    name: 'AndroidToolDefinition',
+    declaration: 'export interface AndroidToolDefinition {\n    readonly name: string;\n    readonly risk: AndroidToolRisk;\n    readonly description: string;\n}',
+  },
+  {
+    name: 'AndroidToolError',
+    declaration: 'export interface AndroidToolError {\n    readonly code: string;\n    readonly message: string;\n    readonly recoveryHint?: string;\n}',
+  },
+  {
+    name: 'AndroidToolRequest',
+    declaration: 'export interface AndroidToolRequest {\n    readonly id: string;\n    readonly tool: string;\n    readonly risk: AndroidToolRisk;\n    readonly arguments: Record<string, unknown>;\n    readonly sessionId?: string;\n}',
+  },
+  {
+    name: 'AndroidToolResponse',
+    declaration: 'export interface AndroidToolResponse {\n    readonly id: string;\n    readonly ok: boolean;\n    readonly result: Record<string, unknown>;\n    readonly error: AndroidToolError | null;\n    readonly durationMs: number;\n}',
+  },
+  {
+    name: 'AndroidToolRisk',
+    declaration: 'export type AndroidToolRisk = \'read_only\' | \'reversible\' | \'external_side_effect\' | \'sensitive\';',
+  },
+  {
     name: 'ApiKeyRecord',
     declaration: 'export interface ApiKeyRecord {\n    readonly kind: \'api-key\';\n    readonly key?: string;\n    readonly env?: Readonly<Record<string, string>>;\n}',
   },
@@ -3234,6 +3317,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface DiffResultView {\n    card: \'diff\';\n    title?: string;\n    diffs: FileDiff[];\n}',
   },
   {
+    name: 'DirectoryCopyOptions',
+    declaration: 'export interface DirectoryCopyOptions {\n    sourcePath: string;\n    targetPath: string;\n    overwrite?: boolean;\n    skipNames?: string[];\n    signal?: AbortSignal;\n}',
+  },
+  {
     name: 'DirectoryPickerBrowseCapability',
     declaration: 'export interface DirectoryPickerBrowseCapability {\n    kind: \'browse\';\n    list(path?: string, signal?: AbortSignal): Promise<DirectoryListing>;\n    createDirectory(path: string, name: string): Promise<string>;\n}',
   },
@@ -3488,6 +3575,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'IndexInjectionPlacement',
     declaration: 'export type IndexInjectionPlacement = \'head\' | \'body\';',
+  },
+  {
+    name: 'InstallBanyanSkillPackageOptions',
+    declaration: 'export interface InstallBanyanSkillPackageOptions {\n    directoryName: string;\n    skillMd: string;\n    files?: BanyanSkillPackageFile[];\n    targetRootPath?: string;\n    overwrite?: boolean;\n    signal?: AbortSignal;\n}',
   },
   {
     name: 'InvariantFailure',
@@ -3786,6 +3877,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface MessageSourceMap {\n    user: {\n        kind: \'user\';\n    };\n    plugin: {\n        kind: \'plugin\';\n        plugin: string;\n    } & ContextFormed;\n    model: ModelMessageSource;\n    tool: ToolMessageSource;\n}',
   },
   {
+    name: 'MobileToolErrorLog',
+    declaration: 'export interface MobileToolErrorLog {\n    readonly code: string;\n    readonly message: string;\n}',
+  },
+  {
+    name: 'MobileToolRisk',
+    declaration: 'export type MobileToolRisk = \'read_only\' | \'reversible\' | \'external_side_effect\' | \'sensitive\';',
+  },
+  {
     name: 'ModelMessageSource',
     declaration: 'export interface ModelMessageSource extends AssistantProvenance {\n    kind: \'model\';\n}',
   },
@@ -3886,6 +3985,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type ProviderRequestId = Branded<\'ProviderRequestId\'>;',
   },
   {
+    name: 'PruneDataOptions',
+    declaration: 'export interface PruneDataOptions {\n    target: \'logs\' | \'cache\';\n    signal?: AbortSignal;\n}',
+  },
+  {
     name: 'PrunedEntry',
     declaration: 'export interface PrunedEntry {\n    readonly originalSeq: number;\n    readonly replacementSeq: number;\n    readonly callId: CallId;\n    readonly charsBefore: number;\n    readonly charsAfter: number;\n}',
   },
@@ -3918,16 +4021,8 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface ReplayEnvelope {\n    response: unknown;\n    blocks?: readonly unknown[];\n}',
   },
   {
-    name: 'RequestContext',
-    declaration: 'export interface RequestContext {\n    provider: string;\n    model: string;\n    contextWindow?: number;\n}',
-  },
-  {
     name: 'RequestErrorAction',
     declaration: 'export type RequestErrorAction = {\n    kind: \'retry\';\n} | undefined;',
-  },
-  {
-    name: 'RequestHeaderReason',
-    declaration: 'export type RequestHeaderReason = \'initial\' | \'resume\' | \'change\';',
   },
   {
     name: 'RequestImageAttachment',
@@ -3979,7 +4074,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'RpcErrorDetailsMap',
-    declaration: 'export interface RpcErrorDetailsMap {\n    \'bad-request\': {\n        issues: ZodIssue[];\n    };\n    \'cancelled\': {};\n    \'session-not-found\': {\n        sessionId: SessionId;\n    };\n    \'model-unavailable\': {\n        provider: string;\n        model: string;\n    };\n    \'session-conflict\': {\n        sessionId: SessionId;\n        requestedCwd: string;\n        existingCwd?: string;\n    };\n    \'invalid-time-zone\': {\n        value: string;\n    };\n    \'workspace-attach-failed\': {\n        sessionId: SessionId;\n        workspaceId: string;\n    };\n    \'workspace-not-found\': {\n        workspaceId: string;\n    };\n    \'workspace-invalid-path\': {\n        path: string;\n    };\n    \'workspace-name-conflict\': {\n        name: string;\n    };\n    \'workspace-move-invalid\': {\n        workspaceId: string;\n        sessionId: SessionId;\n        beforeSessionId?: SessionId;\n    };\n    \'directory-unreadable\': {\n        path: string;\n    };\n    \'directory-exists\': {\n        path: string;\n    };\n    \'directory-create-failed\': {\n        path: string;\n    };\n    \'directory-picker-unavailable\': {\n        capability: string;\n    };\n    \'agent-preset-read-only\': {\n        agentPreset: string;\n        reason: string;\n    };\n    \'agent-preset-locked\': {\n        sessionId: SessionId;\n        agentPreset: string;\n    };\n    \'agent-preset-conflict\': {\n        sessionId: SessionId;\n        requestedPreset: string;\n        existingPreset?: string;\n    };\n    \'agent-preset-not-found\': {\n        agentPreset: string;\n      /* …truncated — full shape in source */',
+    declaration: 'export interface RpcErrorDetailsMap {\n    \'bad-request\': {\n        issues: ZodIssue[];\n    };\n    \'cancelled\': {};\n    \'session-not-found\': {\n        sessionId: SessionId;\n    };\n    \'model-unavailable\': {\n        provider: string;\n        model: string;\n    };\n    \'session-conflict\': {\n        sessionId: SessionId;\n        requestedCwd: string;\n        existingCwd?: string;\n    };\n    \'invalid-time-zone\': {\n        value: string;\n    };\n    \'workspace-attach-failed\': {\n        sessionId: SessionId;\n        workspaceId: string;\n    };\n    \'workspace-not-found\': {\n        workspaceId: string;\n    };\n    \'workspace-invalid-path\': {\n        path: string;\n    };\n    \'workspace-name-conflict\': {\n        name: string;\n    };\n    \'workspace-move-invalid\': {\n        workspaceId: string;\n        sessionId: SessionId;\n        beforeSessionId?: SessionId;\n    };\n    \'directory-unreadable\': {\n        path: string;\n    };\n    \'directory-exists\': {\n        path: string;\n    };\n    \'directory-create-failed\': {\n        path: string;\n    };\n    \'directory-copy-failed\': {\n        sourcePath: string;\n        targetPath: string;\n    };\n    \'directory-picker-unavailable\': {\n        capability: string;\n    };\n    \'agent-preset-read-only\': {\n        agentPreset: string;\n        reason: string;\n    };\n    \'agent-preset-locked\': {\n        sessionId: SessionId;\n        agentPreset: string;\n    };\n    \'agent-preset-conflict\': {\n        sessionId: SessionId;\n        requestedPreset: string;\n        exis /* …truncated — full shape in source */',
   },
   {
     name: 'RpcId',
@@ -4083,7 +4178,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SessionEventMap',
-    declaration: 'export interface SessionEventMap {\n    \'turn/start\': {\n        turn: number;\n    };\n    \'turn/end\': {\n        turn: number;\n        reason: TurnEndReason;\n    };\n    \'step/start\': {\n        turn: number;\n        step: number;\n    };\n    \'step/end\': {\n        turn: number;\n        step: number;\n    };\n    \'user/message\': UserMessage;\n    \'assistant/chunk\': {\n        turn: number;\n        step: number;\n        chunk: StreamChunk;\n    };\n    \'assistant/message\': {\n        turn: number;\n        step: number;\n        message: AssistantMessage;\n        usage?: TokenUsage;\n        interrupted?: true;\n    };\n    \'tool/call\': {\n        turn: number;\n        step: number;\n        callId: CallId;\n        name: string;\n        arguments: string;\n    };\n    \'tool/result\': {\n        turn: number;\n        step: number;\n        message: ToolResultMessage;\n        error?: {\n            name: string;\n            code: string;\n        };\n        meta?: JsonValue;\n    };\n    \'todo/write\': {\n        todos: TodoItem[];\n    };\n    \'request/header\': {\n        header: EpochHeader;\n        reason: RequestHeaderReason;\n    };\n    \'request/context\': RequestContext;\n    \'session/end-seed\': Record<string, never>;\n}',
+    declaration: 'export interface SessionEventMap {\n    \'turn/start\': {\n        turn: number;\n    };\n    \'turn/end\': {\n        turn: number;\n        reason: TurnEndReason;\n    };\n    \'step/start\': {\n        turn: number;\n        step: number;\n    };\n    \'step/end\': {\n        turn: number;\n        step: number;\n    };\n    \'user/message\': UserMessage;\n    \'assistant/chunk\': {\n        turn: number;\n        step: number;\n        chunk: StreamChunk;\n    };\n    \'assistant/message\': {\n        turn: number;\n        step: number;\n        message: AssistantMessage;\n        usage?: TokenUsage;\n        interrupted?: true;\n    };\n    \'tool/call\': {\n        turn: number;\n        step: number;\n        callId: CallId;\n        name: string;\n        arguments: string;\n    };\n    \'tool/result\': {\n        turn: number;\n        step: number;\n        message: ToolResultMessage;\n        error?: {\n            name: string;\n            code: string;\n        };\n        meta?: JsonValue;\n    };\n    \'mobile/tool-request\': {\n        callId: CallId;\n        requestId: string;\n        tool: string;\n        risk: MobileToolRisk;\n        argumentsJson: string;\n        bridgeSessionId?: string;\n    };\n    \'mobile/tool-result\': {\n        callId: CallId;\n        requestId: string;\n        tool: string;\n        ok: boolean;\n        resultJson: string;\n        error?: MobileToolErrorLog;\n        durationMs: number;\n    };\n    \'mobile/bridge-connected\': {\n        callId: CallId;\n        requestId: string;\n        tool: string;\n    /* …truncated — full shape in source */',
   },
   {
     name: 'SessionEventMetadataFilter',
@@ -4724,10 +4819,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'TerminalWaitReason',
     declaration: 'export type TerminalWaitReason = \'stdin_read\' | \'inferred_idle\' | \'timeout\' | \'session_exit\';',
-  },
-  {
-    name: 'TodoItem',
-    declaration: 'export interface TodoItem {\n    content: string;\n    status: \'pending\' | \'in_progress\' | \'completed\';\n}',
   },
   {
     name: 'TokenMeasurement',

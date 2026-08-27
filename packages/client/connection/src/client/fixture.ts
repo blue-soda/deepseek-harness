@@ -2619,6 +2619,7 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
       describe: request => ok(request, {
         version: '0.0.0-fixture', cwd: '/tmp/fixture', attachedSessions, home: FIXTURE_HOME, canOpenPath: true,
       }),
+      pruneData: request => ok(request, { home: FIXTURE_HOME, target: request.payload.target, files: 0, bytes: 0 }),
       // Deterministic native pick: the keyless lanes drive the full
       // pick-then-adopt path without an OS chooser (design-mock content,
       // same tree the browse primitives serve).
@@ -3224,6 +3225,7 @@ export class FixtureApiClient extends AbstractApiClient {
       case 'host.copyDirectory': return this.api.host.copyDirectory(request, new AbortController().signal)
       case 'host.installBanyanSkillPackage': return this.api.host.installBanyanSkillPackage(request, new AbortController().signal)
       case 'host.openPath': return this.api.host.openPath(request, new AbortController().signal)
+      case 'host.pruneData': return this.api.host.pruneData(request, signal)
       case 'workspace.list': return this.api.workspace.list(request)
       case 'workspace.create': return this.api.workspace.create(request)
       case 'workspace.rename': return this.api.workspace.rename(request)

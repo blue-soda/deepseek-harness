@@ -110,6 +110,8 @@ export const SERVICE_PAGE: Record<string, string> = {
   typert: 'typert.md',
   typertGateway: 'typert.md',
   userQuestions: 'user-questions.md',
+  banyanFileOps: 'banyan.md',
+  mobile: 'banyan.md',
   web: 'web.md',
   workflowEngine: 'workflow.md',
   workspaceRegistry: 'workspace.md',
@@ -625,6 +627,16 @@ export const TYPE_LINK_EXEMPTIONS: Readonly<Record<string, string>> = {
   WorkflowAgentEndInfo: 'event-local snapshot is owned by packages/workflow/workflow/src/index.ts',
   WorkflowAgentInfo: 'event-local snapshot is owned by packages/workflow/workflow/src/index.ts',
   WorkflowResultInfo: 'event-local snapshot is owned by packages/workflow/workflow/src/index.ts',
+  DirectoryCopyOptions: 'Banyan host copy request is owned by packages/host/banyan-file-ops/src/index.ts',
+  DirectoryCopyResult: 'Banyan host copy result is owned by packages/host/banyan-file-ops/src/index.ts',
+  InstallBanyanSkillPackageOptions: 'Banyan skill install request is owned by packages/host/banyan-file-ops/src/index.ts',
+  InstallBanyanSkillPackageResult: 'Banyan skill install result is owned by packages/host/banyan-file-ops/src/index.ts',
+  PruneDataOptions: 'Banyan host prune request is owned by packages/host/banyan-file-ops/src/index.ts',
+  PruneDataResult: 'Banyan host prune result is owned by packages/host/banyan-file-ops/src/index.ts',
+  AndroidBridgeProvider: 'mobile bridge provider is owned by packages/mobile/mobile/src/index.ts',
+  AndroidBridgeHealth: 'mobile bridge health is owned by packages/mobile/mobile/src/index.ts',
+  AndroidToolRequest: 'mobile tool request is owned by packages/mobile/mobile/src/index.ts',
+  AndroidToolResponse: 'mobile tool response is owned by packages/mobile/mobile/src/index.ts',
 }
 
 /** Repository data policy consumed by the Cordis catalog projector. */

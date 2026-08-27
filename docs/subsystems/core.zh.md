@@ -479,6 +479,13 @@ composedPreset(agentCtx: Context): string | undefined
 async read(id: string): Promise<string>
 
 /**
+ * Replace a locally authored preset's composition text.
+ * @param id - the preset id.
+ * @param content - the exact composition text to write.
+ */
+async write(id: string, content: string): Promise<void>
+
+/**
  * Create a locally authored preset by copying an existing one whole.
  *
  * Copy is the only authoring write. Composition text never crosses this

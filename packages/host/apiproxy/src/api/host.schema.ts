@@ -107,6 +107,20 @@ export const hostInstallBanyanSkillPackageValueSchema = z.object({
   writtenFiles: z.number().int().nonnegative(),
   skippedFiles: z.number().int().nonnegative(),
 }) satisfies z.ZodType<Wire<ResponseValue<'host.installBanyanSkillPackage'>>>
+
+/** host.pruneData request payload: which host-local data tree to prune. */
+export const hostPruneDataRequestSchema = z.object({
+  target: z.enum(['logs', 'cache']),
+}) satisfies z.ZodType<Wire<RequestPayload<'host.pruneData'>>>
+
+/** host.pruneData response value. */
+export const hostPruneDataValueSchema = z.object({
+  home: z.string(),
+  target: z.enum(['logs', 'cache']),
+  files: z.number().int().nonnegative(),
+  bytes: z.number().int().nonnegative(),
+}) satisfies z.ZodType<Wire<ResponseValue<'host.pruneData'>>>
+
 /** host.openPath request payload. */
 export const hostOpenPathRequestSchema = z.object({
   path: z.string().min(1),

@@ -2988,6 +2988,43 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
         }
       },
 
+      async pruneData(request, signal) {
+        const fileOps = ctx.get('banyanFileOps')
+        if (fileOps === undefined) {
+          return err(request, {
+            code: 'directory-copy-failed',
+            message: 'Banyan host file operations plugin is not mounted',
+            details: {
+              sourcePath: '',
+              targetPath: request.payload.target,
+            },
+          })
+        }
+        try {
+          return ok(request, await fileOps.pruneData({
+            target: request.payload.target,
+            signal,
+          }))
+        } catch (error: unknown) {
+          if (signal.aborted) return err(request, { code: 'cancelled', message: 'host data prune was aborted', details: {} })
+          if (error instanceof BanyanFileOpsError) {
+            return err(request, {
+              code: 'directory-copy-failed',
+              message: error.message,
+              details: { sourcePath: error.sourcePath, targetPath: error.targetPath },
+            })
+          }
+          return err(request, {
+            code: 'directory-copy-failed',
+            message: `failed to prune host ${request.payload.target} data: ${error instanceof Error ? error.message : String(error)}`,
+            details: {
+              sourcePath: '',
+              targetPath: request.payload.target,
+            },
+          })
+        }
+      },
+
       async openPath(request, signal) {
         return openPath(request, request.payload.path, signal)
       },

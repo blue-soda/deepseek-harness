@@ -44,6 +44,7 @@ export interface RpcMethodMap {
   'host.createDirectory': HostApi['createDirectory']
   'host.copyDirectory': HostApi['copyDirectory']
   'host.installBanyanSkillPackage': HostApi['installBanyanSkillPackage']
+  'host.pruneData': HostApi['pruneData']
   'host.openPath': HostApi['openPath']
   'workspace.list': WorkspaceApi['list']
   'workspace.create': WorkspaceApi['create']

@@ -59,6 +59,18 @@ export interface InstallBanyanSkillPackageResult {
   skippedFiles: number
 }
 
+/** host.pruneData response counters. */
+export interface PruneDataResult {
+  /** The resolved host account home the prune ran against. */
+  home: string
+  /** The pruned target, echoed from the request. */
+  target: 'logs' | 'cache'
+  /** Number of regular files deleted. */
+  files: number
+  /** Total bytes freed by the deletions. */
+  bytes: number
+}
+
 /** Host-level unary methods. */
 export interface HostApi {
   /**
@@ -143,6 +155,17 @@ export interface HostApi {
     }>,
     signal: AbortSignal,
   ): Promise<RpcResponse<InstallBanyanSkillPackageResult>>
+
+  /**
+   * Delete regular files under the host account's session ('logs') or cache
+   * storage ('cache') directory, keeping the directories themselves. Profiles,
+   * settings, skills, credentials, attachments and per-agent workspaces are
+   * never touched. An absent target directory is a no-op returning zero files.
+   */
+  pruneData(
+    request: RpcRequest<{ target: 'logs' | 'cache' }>,
+    signal: AbortSignal,
+  ): Promise<RpcResponse<PruneDataResult>>
 
   /**
    * Open a filesystem path with the operating system's default application

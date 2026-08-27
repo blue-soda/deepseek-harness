@@ -33,7 +33,7 @@ import {
   hostCopyDirectoryRequestSchema, hostCreateDirectoryRequestSchema, hostDescribeRequestSchema,
   hostInstallBanyanSkillPackageRequestSchema,
   hostListDirectoryRequestSchema, hostOpenPathRequestSchema,
-  hostPickDirectoryRequestSchema,
+  hostPickDirectoryRequestSchema, hostPruneDataRequestSchema,
 } from '../api/host.schema.ts'
 import {
   workspaceArchiveSessionRequestSchema,
@@ -112,6 +112,7 @@ const UNARY_ROUTES: UnaryRoutes = {
   'host.createDirectory': { schema: hostCreateDirectoryRequestSchema, invoke: (api, r) => api.host.createDirectory(r) },
   'host.copyDirectory': { schema: hostCopyDirectoryRequestSchema, invoke: (api, r, signal) => api.host.copyDirectory(r, signal) },
   'host.installBanyanSkillPackage': { schema: hostInstallBanyanSkillPackageRequestSchema, invoke: (api, r, signal) => api.host.installBanyanSkillPackage(r, signal) },
+  'host.pruneData': { schema: hostPruneDataRequestSchema, invoke: (api, r, signal) => api.host.pruneData(r, signal) },
   'host.openPath': { schema: hostOpenPathRequestSchema, invoke: (api, r, signal) => api.host.openPath(r, signal) },
   'workspace.list': { schema: workspaceListRequestSchema, invoke: (api, r) => api.workspace.list(r) },
   'workspace.create': { schema: workspaceCreateRequestSchema, invoke: (api, r) => api.workspace.create(r) },
