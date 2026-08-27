@@ -185,6 +185,12 @@ function fakeApi(overrides: Partial<{ muxFrames: MuxFrame[]; hostFrames: HostFra
           },
         }
       },
+      async pruneData(request) {
+        return {
+          rpcId: request.rpcId,
+          result: { ok: true, value: { home: '/h', target: request.payload.target, files: 0, bytes: 0 } },
+        }
+      },
       async openPath(request) {
         return { rpcId: request.rpcId, result: { ok: true, value: { opened: true as const } } }
       },

@@ -90,6 +90,7 @@ function scriptedApi(overrides: {
         writtenFiles: 1 + (r.payload.files?.length ?? 0),
         skippedFiles: 0,
       }),
+      pruneData: r => ok(r, { home: '/h', target: r.payload.target, files: 0, bytes: 0 }),
       openPath: r => ok(r, { opened: true as const }),
       ...overrides.host,
     },
