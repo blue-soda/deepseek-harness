@@ -29,6 +29,8 @@ export interface Config {
   readonly contentSearch?: boolean
   /** Register single content retrieval. */
   readonly contentGet?: boolean
+  /** Register DSH skill package retrieval. */
+  readonly skillPackageGet?: boolean
   /** Register knowledge chunk search. */
   readonly knowledgeSearch?: boolean
   /** Register single knowledge document retrieval. */
@@ -42,6 +44,7 @@ export const Config: z<Config> = z.object({
   timeoutMs: z.number().step(1).min(1).default(10_000),
   contentSearch: z.boolean().default(true),
   contentGet: z.boolean().default(true),
+  skillPackageGet: z.boolean().default(true),
   knowledgeSearch: z.boolean().default(true),
   knowledgeGet: z.boolean().default(true),
 })
@@ -53,6 +56,7 @@ interface ResolvedConfig {
   readonly timeoutMs: number
   readonly contentSearch: boolean
   readonly contentGet: boolean
+  readonly skillPackageGet: boolean
   readonly knowledgeSearch: boolean
   readonly knowledgeGet: boolean
 }
@@ -81,6 +85,7 @@ const TEXT_OUTPUT = {
 const PROMPT_TEXT =
   'Use Banyan search tools as a read-only Agentic RAG source for Banyan posts and shared DSH skills. '
   + 'Call banyan_content_search first to find candidate items, then banyan_content_get when the full Markdown body or attachments are needed. '
+  + 'For DSH skill shares, call banyan_skill_package_get to inspect the normalized SKILL.md package before suggesting import or local installation. '
   + 'Call banyan_knowledge_search for personal/team knowledge snippets, then banyan_knowledge_get if the original Markdown document is needed. '
   + 'Respect each result visibility and cite content titles or authors when using retrieved information. '
   + 'These tools do not mutate Banyan Server and do not provide backend maintenance permissions.'
@@ -96,6 +101,7 @@ export function apply(ctx: Context, config: Config): void {
 
   if (resolved.contentSearch) registerContentSearch(ctx, resolved)
   if (resolved.contentGet) registerContentGet(ctx, resolved)
+  if (resolved.skillPackageGet) registerSkillPackageGet(ctx, resolved)
   if (resolved.knowledgeSearch) registerKnowledgeSearch(ctx, resolved)
   if (resolved.knowledgeGet) registerKnowledgeGet(ctx, resolved)
 }
@@ -145,6 +151,23 @@ function registerContentGet(ctx: Context, config: ResolvedConfig): void {
       path: `/contents/${encodeURIComponent(requireString(args, 'contentId'))}`,
     })),
     presentCall: args => ({ card: 'generic', title: 'Read Banyan content', kind: 'read', rawInput: args }),
+  }))
+}
+
+function registerSkillPackageGet(ctx: Context, config: ResolvedConfig): void {
+  ctx.tools.register(defineTool({
+    name: 'banyan_skill_package_get',
+    description: 'Fetch one visible Banyan DSH skill share as a normalized import package: SKILL.md content, parsed name/description, recommended directory name, and references/scripts/templates attachments. Use after banyan_content_search finds a DSH_SKILL item.',
+    parameters: {
+      contentId: { type: 'string', required: true, description: 'Banyan DSH_SKILL content ID.' },
+    },
+    output: TEXT_OUTPUT,
+    timeoutMs: config.timeoutMs,
+    isConcurrencySafe: () => true,
+    execute: async args => formatHttpResult(await requestJson(config, {
+      path: `/contents/${encodeURIComponent(requireString(args, 'contentId'))}/skill-package`,
+    })),
+    presentCall: args => ({ card: 'generic', title: 'Read Banyan skill package', kind: 'read', rawInput: args }),
   }))
 }
 
@@ -279,6 +302,7 @@ function resolveConfig(config: Config): ResolvedConfig {
     timeoutMs,
     contentSearch: config.contentSearch ?? true,
     contentGet: config.contentGet ?? true,
+    skillPackageGet: config.skillPackageGet ?? true,
     knowledgeSearch: config.knowledgeSearch ?? true,
     knowledgeGet: config.knowledgeGet ?? true,
   }
