@@ -17,6 +17,7 @@ import {
 import {
   hostCreateDirectoryRequestSchema, hostCreateDirectoryValueSchema,
   hostDescribeRequestSchema, hostDescribeValueSchema,
+  hostInstallBanyanSkillPackageRequestSchema, hostInstallBanyanSkillPackageValueSchema,
   hostListDirectoryRequestSchema, hostListDirectoryValueSchema,
 } from '../src/api/host.schema.ts'
 import {
@@ -344,6 +345,29 @@ describe('host domain schemas', () => {
       expect(() => hostCreateDirectoryRequestSchema.parse({ path: '/x', name })).toThrow()
     }
     expect(hostCreateDirectoryValueSchema.parse({ path: '/x/new' })).toEqual({ path: '/x/new' })
+  })
+
+  it('validates Banyan skill package installation payloads', () => {
+    const payload = hostInstallBanyanSkillPackageRequestSchema.parse({
+      directoryName: 'backend-resume-coach',
+      skillMd: '---\nname: backend-resume-coach\n---\n# Backend Resume Coach\n',
+      files: [
+        { path: 'references/cases.md', text: '# Cases' },
+        { path: 'scripts/score.js', url: 'https://cdn.example.test/score.js' },
+      ],
+    })
+    expect(payload.files).toHaveLength(2)
+    expect(() => hostInstallBanyanSkillPackageRequestSchema.parse({
+      directoryName: 'backend-resume-coach',
+      skillMd: '# Skill',
+      files: [{ path: 'references/cases.md' }],
+    })).toThrow()
+    expect(hostInstallBanyanSkillPackageValueSchema.parse({
+      targetRootPath: '/home/u/.dsh/skills',
+      installedPath: '/home/u/.dsh/skills/backend-resume-coach',
+      writtenFiles: 3,
+      skippedFiles: 0,
+    }).writtenFiles).toBe(3)
   })
 })
 

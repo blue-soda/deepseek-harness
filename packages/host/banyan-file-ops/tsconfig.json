@@ -11,8 +11,7 @@
     "src"
   ],
   "references": [
-    {
-      "path": "../../../vendor/cordis"
-    }
+    { "path": "../../../vendor/cordis" },
+    { "path": "../../util/home-paths" }
   ]
 }

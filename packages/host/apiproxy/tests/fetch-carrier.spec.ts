@@ -156,6 +156,35 @@ function fakeApi(overrides: Partial<{ muxFrames: MuxFrame[]; hostFrames: HostFra
       async createDirectory(request) {
         return { rpcId: request.rpcId, result: { ok: true, value: { path: '/w/new' } } }
       },
+      async copyDirectory(request) {
+        return {
+          rpcId: request.rpcId,
+          result: {
+            ok: true,
+            value: {
+              sourcePath: request.payload.sourcePath,
+              targetPath: request.payload.targetPath,
+              copiedFiles: 0,
+              copiedDirectories: 0,
+              skippedEntries: 0,
+            },
+          },
+        }
+      },
+      async installBanyanSkillPackage(request) {
+        return {
+          rpcId: request.rpcId,
+          result: {
+            ok: true,
+            value: {
+              targetRootPath: request.payload.targetRootPath ?? '/h/.dsh/skills',
+              installedPath: `${request.payload.targetRootPath ?? '/h/.dsh/skills'}/${request.payload.directoryName}`,
+              writtenFiles: 1 + (request.payload.files?.length ?? 0),
+              skippedFiles: 0,
+            },
+          },
+        }
+      },
       async openPath(request) {
         return { rpcId: request.rpcId, result: { ok: true, value: { opened: true as const } } }
       },
@@ -205,6 +234,10 @@ function fakeApi(overrides: Partial<{ muxFrames: MuxFrame[]; hostFrames: HostFra
       },
       read(request: RpcRequest<{ agentPreset: string }>) {
         const value = { agentPreset: request.payload.agentPreset, trust: 'user' as const, content: '' }
+        return Promise.resolve({ rpcId: request.rpcId, result: { ok: true as const, value } })
+      },
+      write(request: RpcRequest<{ agentPreset: string; content: string }>) {
+        const value = { agentPreset: request.payload.agentPreset }
         return Promise.resolve({ rpcId: request.rpcId, result: { ok: true as const, value } })
       },
       copy(request: RpcRequest<{ from: string; agentPreset: string }>) {

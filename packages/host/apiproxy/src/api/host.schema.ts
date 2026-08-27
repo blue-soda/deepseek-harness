@@ -3,7 +3,7 @@
  */
 
 import { z } from 'zod'
-import type { DirectoryEntry } from './host.ts'
+import type { BanyanSkillPackageFile, DirectoryEntry } from './host.ts'
 import type { RequestPayload, ResponseValue } from './rpc-map.ts'
 import type { Wire } from './rpc.schema.ts'
 
@@ -81,6 +81,32 @@ export const hostCopyDirectoryValueSchema = z.object({
   copiedDirectories: z.number().int().nonnegative(),
   skippedEntries: z.number().int().nonnegative(),
 }) satisfies z.ZodType<Wire<ResponseValue<'host.copyDirectory'>>>
+
+const banyanSkillPackageFileSchema = z.object({
+  path: z.string().min(1),
+  url: z.string().url().nullable().optional(),
+  text: z.string().optional(),
+}).refine(
+  payload => payload.url !== undefined || payload.text !== undefined,
+  { message: 'a skill package file requires either url or text' },
+) satisfies z.ZodType<Wire<BanyanSkillPackageFile>>
+
+/** host.installBanyanSkillPackage request payload. */
+export const hostInstallBanyanSkillPackageRequestSchema = z.object({
+  directoryName: z.string().min(1),
+  skillMd: z.string().min(1),
+  files: z.array(banyanSkillPackageFileSchema).optional(),
+  targetRootPath: z.string().min(1).optional(),
+  overwrite: z.boolean().optional(),
+}) satisfies z.ZodType<Wire<RequestPayload<'host.installBanyanSkillPackage'>>>
+
+/** host.installBanyanSkillPackage response value. */
+export const hostInstallBanyanSkillPackageValueSchema = z.object({
+  targetRootPath: z.string(),
+  installedPath: z.string(),
+  writtenFiles: z.number().int().nonnegative(),
+  skippedFiles: z.number().int().nonnegative(),
+}) satisfies z.ZodType<Wire<ResponseValue<'host.installBanyanSkillPackage'>>>
 /** host.openPath request payload. */
 export const hostOpenPathRequestSchema = z.object({
   path: z.string().min(1),

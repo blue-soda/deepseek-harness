@@ -15,6 +15,7 @@ import { rpcReceiptSchema, serverRequestSchema, serverResponseSchema } from '../
 import { hostFrameSchema, muxFrameSchema } from '../api/events.schema.ts'
 import {
   hostCopyDirectoryValueSchema, hostCreateDirectoryValueSchema, hostDescribeValueSchema,
+  hostInstallBanyanSkillPackageValueSchema,
   hostListDirectoryValueSchema, hostOpenPathValueSchema, hostPickDirectoryValueSchema,
 } from '../api/host.schema.ts'
 import {
@@ -112,6 +113,7 @@ export interface IApiClient {
     listDirectory(payload: RequestPayload<'host.listDirectory'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'host.listDirectory'>>>
     createDirectory(payload: RequestPayload<'host.createDirectory'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'host.createDirectory'>>>
     copyDirectory(payload: RequestPayload<'host.copyDirectory'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'host.copyDirectory'>>>
+    installBanyanSkillPackage(payload: RequestPayload<'host.installBanyanSkillPackage'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'host.installBanyanSkillPackage'>>>
     openPath(payload: RequestPayload<'host.openPath'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'host.openPath'>>>
   }
   workspace: {
@@ -194,6 +196,7 @@ const UNARY_VALUE_SCHEMAS: { [K in keyof RpcMethodMap]: z.ZodType<Wire<ResponseV
   'host.listDirectory': hostListDirectoryValueSchema,
   'host.createDirectory': hostCreateDirectoryValueSchema,
   'host.copyDirectory': hostCopyDirectoryValueSchema,
+  'host.installBanyanSkillPackage': hostInstallBanyanSkillPackageValueSchema,
   'host.openPath': hostOpenPathValueSchema,
   'workspace.list': workspaceListValueSchema,
   'workspace.create': workspaceCreateValueSchema,
@@ -446,6 +449,7 @@ export abstract class AbstractApiClient implements IApiClient {
     listDirectory: (payload, signal) => this.callUnary('host.listDirectory', payload, signal),
     createDirectory: (payload, signal) => this.callUnary('host.createDirectory', payload, signal),
     copyDirectory: (payload, signal) => this.callUnary('host.copyDirectory', payload, signal, 'caller-signal-only'),
+    installBanyanSkillPackage: (payload, signal) => this.callUnary('host.installBanyanSkillPackage', payload, signal, 'caller-signal-only'),
     openPath: (payload, signal) => this.callUnary('host.openPath', payload, signal),
   }
 

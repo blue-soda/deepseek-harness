@@ -41,6 +41,24 @@ export interface DirectoryCopyResult {
   skippedEntries: number
 }
 
+/** One text file from a Banyan DSH Skill package. */
+export interface BanyanSkillPackageFile {
+  /** Relative path below the installed skill directory. */
+  path: string
+  /** Optional source URL fetched by the Host when inline text is absent. */
+  url?: string | null
+  /** Optional inline text content. */
+  text?: string
+}
+
+/** host.installBanyanSkillPackage response counters. */
+export interface InstallBanyanSkillPackageResult {
+  targetRootPath: string
+  installedPath: string
+  writtenFiles: number
+  skippedFiles: number
+}
+
 /** Host-level unary methods. */
 export interface HostApi {
   /**
@@ -109,6 +127,22 @@ export interface HostApi {
     }>,
     signal: AbortSignal,
   ): Promise<RpcResponse<DirectoryCopyResult>>
+
+  /**
+   * Install one Banyan shared DSH Skill into the user's skill root. Unlike a
+   * generic write-file RPC, this operation is constrained to a single skill
+   * directory and validates every package file path before writing it.
+   */
+  installBanyanSkillPackage(
+    request: RpcRequest<{
+      directoryName: string
+      skillMd: string
+      files?: BanyanSkillPackageFile[]
+      targetRootPath?: string
+      overwrite?: boolean
+    }>,
+    signal: AbortSignal,
+  ): Promise<RpcResponse<InstallBanyanSkillPackageResult>>
 
   /**
    * Open a filesystem path with the operating system's default application

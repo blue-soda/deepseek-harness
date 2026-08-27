@@ -2947,6 +2947,47 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
         }
       },
 
+      async installBanyanSkillPackage(request, signal) {
+        const fileOps = ctx.get('banyanFileOps')
+        if (fileOps === undefined) {
+          return err(request, {
+            code: 'directory-copy-failed',
+            message: 'Banyan host file operations plugin is not mounted',
+            details: {
+              sourcePath: request.payload.targetRootPath ?? '',
+              targetPath: request.payload.directoryName,
+            },
+          })
+        }
+        try {
+          return ok(request, await fileOps.installBanyanSkillPackage({
+            directoryName: request.payload.directoryName,
+            skillMd: request.payload.skillMd,
+            ...request.payload.files === undefined ? {} : { files: request.payload.files },
+            ...request.payload.targetRootPath === undefined ? {} : { targetRootPath: request.payload.targetRootPath },
+            overwrite: request.payload.overwrite === true,
+            signal,
+          }))
+        } catch (error: unknown) {
+          if (signal.aborted) return err(request, { code: 'cancelled', message: 'skill install was aborted', details: {} })
+          if (error instanceof BanyanFileOpsError) {
+            return err(request, {
+              code: 'directory-copy-failed',
+              message: error.message,
+              details: { sourcePath: error.sourcePath, targetPath: error.targetPath },
+            })
+          }
+          return err(request, {
+            code: 'directory-copy-failed',
+            message: `failed to install Banyan skill package "${request.payload.directoryName}": ${error instanceof Error ? error.message : String(error)}`,
+            details: {
+              sourcePath: request.payload.targetRootPath ?? '',
+              targetPath: request.payload.directoryName,
+            },
+          })
+        }
+      },
+
       async openPath(request, signal) {
         return openPath(request, request.payload.path, signal)
       },

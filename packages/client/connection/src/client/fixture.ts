@@ -2655,6 +2655,19 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
         directoryTree.set(target, [])
         return ok(request, { path: target })
       },
+      copyDirectory: request => ok(request, {
+        sourcePath: request.payload.sourcePath,
+        targetPath: request.payload.targetPath,
+        copiedFiles: 0,
+        copiedDirectories: 1,
+        skippedEntries: 0,
+      }),
+      installBanyanSkillPackage: request => ok(request, {
+        targetRootPath: request.payload.targetRootPath ?? `${FIXTURE_HOME}/.dsh/skills`,
+        installedPath: `${request.payload.targetRootPath ?? `${FIXTURE_HOME}/.dsh/skills`}/${request.payload.directoryName}`,
+        writtenFiles: 1 + (request.payload.files?.length ?? 0),
+        skippedFiles: 0,
+      }),
       openPath: request => ok(request, { opened: true as const }),
     },
     workspace: {
@@ -3208,6 +3221,8 @@ export class FixtureApiClient extends AbstractApiClient {
       case 'host.pickDirectory': return this.api.host.pickDirectory(request, new AbortController().signal)
       case 'host.listDirectory': return this.api.host.listDirectory(request, new AbortController().signal)
       case 'host.createDirectory': return this.api.host.createDirectory(request)
+      case 'host.copyDirectory': return this.api.host.copyDirectory(request, new AbortController().signal)
+      case 'host.installBanyanSkillPackage': return this.api.host.installBanyanSkillPackage(request, new AbortController().signal)
       case 'host.openPath': return this.api.host.openPath(request, new AbortController().signal)
       case 'workspace.list': return this.api.workspace.list(request)
       case 'workspace.create': return this.api.workspace.create(request)
