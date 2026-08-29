@@ -37,6 +37,8 @@ export interface Config {
   readonly kafkaLag?: boolean
   /** Register read-only recent operations audit log. */
   readonly auditRecent?: boolean
+  /** Register read-only target execution trace aggregation. */
+  readonly traceTarget?: boolean
   /** Register content search over Banyan Server search API. */
   readonly contentSearch?: boolean
   /** Register Redis reaction cache rebuild action. */
@@ -100,6 +102,7 @@ export const Config: z<Config> = z.object({
   health: z.boolean().default(true),
   kafkaLag: z.boolean().default(true),
   auditRecent: z.boolean().default(true),
+  traceTarget: z.boolean().default(true),
   contentSearch: z.boolean().default(true),
   rebuildReactionCache: z.boolean().default(true),
   inspectReactionCache: z.boolean().default(true),
@@ -138,6 +141,7 @@ interface ResolvedConfig {
   readonly health: boolean
   readonly kafkaLag: boolean
   readonly auditRecent: boolean
+  readonly traceTarget: boolean
   readonly contentSearch: boolean
   readonly rebuildReactionCache: boolean
   readonly inspectReactionCache: boolean
@@ -190,6 +194,7 @@ const TEXT_OUTPUT = {
 const PROMPT_TEXT =
   'Use Banyan ops tools to inspect and repair the Banyan backend through its audited HTTP API. '
   + 'banyan_ops_status is read-only and should be called before maintenance; banyan_ops_health actively checks Redis, Elasticsearch, and Kafka connectivity; banyan_kafka_lag inspects consumer lag for the Canal/Kafka projection topic; banyan_ops_audit_recent shows who recently ran maintenance actions. '
+  + 'Use banyan_ops_trace_target when you have a content id, knowledge document id, workspace id, Agent profile id, or search index name and need one execution-chain report with matching audit rows, outbox rows, observations, and suggested repair tools. '
   + 'banyan_content_search searches public/friend/self content through the server search layer, backed by Elasticsearch when enabled. '
   + 'Use banyan_content_cache_inspect and banyan_reaction_cache_inspect before cache repair when possible; use banyan_content_cache_evict or banyan_content_cache_warm for stale content details, banyan_content_counters_rebuild for stale denormalized like/favorite counts, banyan_reaction_cache_rebuild for one stale Redis reaction bitmap, banyan_reaction_cache_rebuild_published after Redis cache loss, and banyan_content_reindex only when a content item is missing or stale in Elasticsearch. '
   + 'Use banyan_content_feed_rebuild_public when the public sharing feed is empty or out of order after Redis loss or projection outages. '
@@ -214,6 +219,7 @@ export function apply(ctx: Context, config: Config): void {
   if (resolved.health) registerOpsHealth(ctx, resolved)
   if (resolved.kafkaLag) registerKafkaLag(ctx, resolved)
   if (resolved.auditRecent) registerOpsAuditRecent(ctx, resolved)
+  if (resolved.traceTarget) registerOpsTraceTarget(ctx, resolved)
   if (resolved.contentSearch) registerContentSearch(ctx, resolved)
   if (resolved.rebuildReactionCache) registerReactionCacheRebuild(ctx, resolved)
   if (resolved.inspectReactionCache) registerReactionCacheInspect(ctx, resolved)
@@ -261,6 +267,35 @@ function registerOpsAuditRecent(ctx: Context, config: ResolvedConfig): void {
       }))
     },
     presentCall: args => ({ card: 'generic', title: 'Read Banyan ops audit log', kind: 'read', rawInput: args }),
+  }))
+}
+
+function registerOpsTraceTarget(ctx: Context, config: ResolvedConfig): void {
+  ctx.tools.register(defineTool({
+    name: 'banyan_ops_trace_target',
+    description: 'Read one Banyan execution-chain report for a target such as CONTENT, KNOWLEDGE_DOCUMENT, KNOWLEDGE_RAG, SEARCH_INDEX, AGENT_PROFILE, or CONVERSATION. Returns matching ops audit rows, outbox rows, status counts, observations, and suggested repair tools.',
+    parameters: {
+      targetType: { type: 'string', description: 'Target type, for example CONTENT, KNOWLEDGE_DOCUMENT, KNOWLEDGE_RAG, SEARCH_INDEX, AGENT_PROFILE, or CONVERSATION.' },
+      targetId: { type: 'string', description: 'Target id, such as a content id, knowledge document id, workspace id, search index name, agent profile id, or conversation id.' },
+      auditLimit: { type: 'integer', description: 'Maximum matching audit rows to return. Defaults to 20, maximum enforced by Banyan Server.' },
+      outboxLimit: { type: 'integer', description: 'Maximum matching outbox rows to return. Defaults to 50, maximum enforced by Banyan Server.' },
+    },
+    output: TEXT_OUTPUT,
+    timeoutMs: config.timeoutMs,
+    isConcurrencySafe: () => true,
+    execute: async (args) => {
+      const query = args as Record<string, unknown>
+      const targetType = requireString(args, 'targetType')
+      const targetId = requireString(args, 'targetId')
+      return formatHttpResult(await requestJson(config, {
+        path: `/ops/traces/${encodeURIComponent(targetType)}/${encodeURIComponent(targetId)}`,
+        query: {
+          auditLimit: readLimit(query.auditLimit, 20),
+          outboxLimit: readLimit(query.outboxLimit, 50),
+        },
+      }))
+    },
+    presentCall: args => ({ card: 'generic', title: 'Trace Banyan execution target', kind: 'read', rawInput: args }),
   }))
 }
 
@@ -934,6 +969,7 @@ function resolveConfig(config: Config): ResolvedConfig {
     health: config.health ?? true,
     kafkaLag: config.kafkaLag ?? true,
     auditRecent: config.auditRecent ?? true,
+    traceTarget: config.traceTarget ?? true,
     contentSearch: config.contentSearch ?? true,
     rebuildReactionCache: config.rebuildReactionCache ?? true,
     inspectReactionCache: config.inspectReactionCache ?? true,
