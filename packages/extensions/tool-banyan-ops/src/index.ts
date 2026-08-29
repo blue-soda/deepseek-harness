@@ -41,6 +41,8 @@ export interface Config {
   readonly requestsRecent?: boolean
   /** Register read-only HTTP request route/target summary. */
   readonly requestSummary?: boolean
+  /** Register read-only internal service span log. */
+  readonly spansRecent?: boolean
   /** Register read-only target execution trace aggregation. */
   readonly traceTarget?: boolean
   /** Register target-scoped trace-driven repair actions. */
@@ -110,6 +112,7 @@ export const Config: z<Config> = z.object({
   auditRecent: z.boolean().default(true),
   requestsRecent: z.boolean().default(true),
   requestSummary: z.boolean().default(true),
+  spansRecent: z.boolean().default(true),
   traceTarget: z.boolean().default(true),
   repairTarget: z.boolean().default(true),
   contentSearch: z.boolean().default(true),
@@ -152,6 +155,7 @@ interface ResolvedConfig {
   readonly auditRecent: boolean
   readonly requestsRecent: boolean
   readonly requestSummary: boolean
+  readonly spansRecent: boolean
   readonly traceTarget: boolean
   readonly repairTarget: boolean
   readonly contentSearch: boolean
@@ -208,7 +212,8 @@ const PROMPT_TEXT =
   + 'banyan_ops_status is read-only and should be called before maintenance; banyan_ops_health actively checks Redis, Elasticsearch, and Kafka connectivity; banyan_kafka_lag inspects consumer lag for the Canal/Kafka projection topic; banyan_ops_audit_recent shows who recently ran maintenance actions. '
   + 'Use banyan_ops_requests_recent to inspect recent HTTP request traces with method, path, status, duration, actor, and business target evidence when debugging API execution chains. '
   + 'Use banyan_ops_request_summary first when you need a compact slow/error request summary grouped by route and business target before drilling into one target trace. '
-  + 'Use banyan_ops_trace_target when you have a content id, knowledge document id, workspace id, Agent profile id, or search index name and need one execution-chain report with matching audit rows, HTTP request rows, outbox rows, observations, and suggested repair tools. '
+  + 'Use banyan_ops_spans_recent to inspect internal service spans such as RAG corpus fan-out and target repair steps with durationMs and business target evidence. '
+  + 'Use banyan_ops_trace_target when you have a content id, knowledge document id, workspace id, Agent profile id, or search index name and need one execution-chain report with matching audit rows, HTTP request rows, service span rows, outbox rows, observations, and suggested repair tools. '
   + 'Use banyan_ops_repair_target after tracing one target when you need Banyan Server to run the supported target-scoped repairs and return a before/steps/after repair report. '
   + 'banyan_content_search searches public/friend/self content through the server search layer, backed by Elasticsearch when enabled. '
   + 'Use banyan_content_cache_inspect and banyan_reaction_cache_inspect before cache repair when possible; use banyan_content_cache_evict or banyan_content_cache_warm for stale content details, banyan_content_counters_rebuild for stale denormalized like/favorite counts, banyan_reaction_cache_rebuild for one stale Redis reaction bitmap, banyan_reaction_cache_rebuild_published after Redis cache loss, and banyan_content_reindex only when a content item is missing or stale in Elasticsearch. '
@@ -236,6 +241,7 @@ export function apply(ctx: Context, config: Config): void {
   if (resolved.auditRecent) registerOpsAuditRecent(ctx, resolved)
   if (resolved.requestsRecent) registerOpsRequestsRecent(ctx, resolved)
   if (resolved.requestSummary) registerOpsRequestSummary(ctx, resolved)
+  if (resolved.spansRecent) registerOpsSpansRecent(ctx, resolved)
   if (resolved.traceTarget) registerOpsTraceTarget(ctx, resolved)
   if (resolved.repairTarget) registerOpsRepairTarget(ctx, resolved)
   if (resolved.contentSearch) registerContentSearch(ctx, resolved)
@@ -336,10 +342,33 @@ function registerOpsRequestSummary(ctx: Context, config: ResolvedConfig): void {
   }))
 }
 
+function registerOpsSpansRecent(ctx: Context, config: ResolvedConfig): void {
+  ctx.tools.register(defineTool({
+    name: 'banyan_ops_spans_recent',
+    description: 'Read recent Banyan Server internal service span entries. Use to inspect RAG corpus fan-out, target repair steps, durationMs, success status, and businessTarget evidence without mixing spans into the maintenance audit log.',
+    parameters: {
+      limit: { type: 'integer', description: 'Maximum service span rows to return. Defaults to 50, maximum enforced by Banyan Server.' },
+    },
+    output: TEXT_OUTPUT,
+    timeoutMs: config.timeoutMs,
+    isConcurrencySafe: () => true,
+    execute: async (args) => {
+      const query = args as Record<string, unknown>
+      return formatHttpResult(await requestJson(config, {
+        path: '/ops/spans/recent',
+        query: {
+          limit: readLimit(query.limit, 50),
+        },
+      }))
+    },
+    presentCall: args => ({ card: 'generic', title: 'Read Banyan service spans', kind: 'read', rawInput: args }),
+  }))
+}
+
 function registerOpsTraceTarget(ctx: Context, config: ResolvedConfig): void {
   ctx.tools.register(defineTool({
     name: 'banyan_ops_trace_target',
-    description: 'Read one Banyan execution-chain report for a target such as CONTENT, KNOWLEDGE_DOCUMENT, KNOWLEDGE_RAG, SEARCH_INDEX, AGENT_PROFILE, or CONVERSATION. Returns matching ops audit rows, HTTP request rows, outbox rows, status counts, observations, and suggested repair tools.',
+    description: 'Read one Banyan execution-chain report for a target such as CONTENT, KNOWLEDGE_DOCUMENT, KNOWLEDGE_RAG, SEARCH_INDEX, AGENT_PROFILE, or CONVERSATION. Returns matching ops audit rows, HTTP request rows, service span rows, outbox rows, status counts, observations, and suggested repair tools.',
     parameters: {
       targetType: { type: 'string', description: 'Target type, for example CONTENT, KNOWLEDGE_DOCUMENT, KNOWLEDGE_RAG, SEARCH_INDEX, AGENT_PROFILE, or CONVERSATION.' },
       targetId: { type: 'string', description: 'Target id, such as a content id, knowledge document id, workspace id, search index name, agent profile id, or conversation id.' },
@@ -1064,6 +1093,7 @@ function resolveConfig(config: Config): ResolvedConfig {
     auditRecent: config.auditRecent ?? true,
     requestsRecent: config.requestsRecent ?? true,
     requestSummary: config.requestSummary ?? true,
+    spansRecent: config.spansRecent ?? true,
     traceTarget: config.traceTarget ?? true,
     repairTarget: config.repairTarget ?? true,
     contentSearch: config.contentSearch ?? true,
