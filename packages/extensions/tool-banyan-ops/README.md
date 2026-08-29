@@ -20,6 +20,7 @@ authorization, audit, and recovery behavior owned by the backend.
 - `banyan_ops_drill_outbox_failure`: mark one existing outbox event as `FAILED` for an explicit reliability drill.
 - `banyan_ops_drill_stale_content_counters`: overwrite one content item's denormalized like/favorite counters for an explicit cache/count repair drill.
 - `banyan_ops_drill_upload_expired`: expire one pending upload object and optionally create a stale local dev-upload file for an explicit upload cleanup drill.
+- `banyan_ops_drill_kafka_consumer_stop`: stop the Banyan Canal/Kafka consumer for a controlled lag drill; verify with `banyan_kafka_lag`, then repair targetType `KAFKA`.
 - `banyan_content_search`: search shared content through Banyan Search.
 - `banyan_mcp_knowledge_search`: call Banyan MCP `banyan.knowledge.search` for audited Agent knowledge citations.
 - `banyan_mcp_rag_search`: call Banyan MCP `banyan.rag.search` for audited cross-corpus RAG citations from knowledge, posts, group-space posts, and DSH Skills with quality scoring.
