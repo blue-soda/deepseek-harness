@@ -214,7 +214,7 @@ const PROMPT_TEXT =
   + 'Use banyan_ops_request_summary first when you need a compact slow/error request summary grouped by route and business target before drilling into one target trace. '
   + 'Use banyan_ops_spans_recent to inspect internal service spans such as RAG corpus fan-out and target repair steps with durationMs and business target evidence. '
   + 'Use banyan_ops_trace_target when you have a content id, knowledge document id, workspace id, Agent profile id, AgentRun id, or search index name and need one execution-chain report with matching audit rows, HTTP request rows, service span rows, outbox rows, observations, and suggested repair tools. '
-  + 'Use banyan_ops_repair_target after tracing one target when you need Banyan Server to run the supported target-scoped repairs and return a before/steps/after repair report. '
+  + 'Use banyan_ops_repair_target after tracing one target when you need Banyan Server to run the supported target-scoped repairs and return a before/steps/after repair report; for maintenance work, follow trace -> repair -> trace again so you can verify the target after-state. '
   + 'banyan_content_search searches public/friend/self content through the server search layer, backed by Elasticsearch when enabled. '
   + 'Use banyan_content_cache_inspect and banyan_reaction_cache_inspect before cache repair when possible; use banyan_content_cache_evict or banyan_content_cache_warm for stale content details, banyan_content_counters_rebuild for stale denormalized like/favorite counts, banyan_reaction_cache_rebuild for one stale Redis reaction bitmap, banyan_reaction_cache_rebuild_published after Redis cache loss, and banyan_content_reindex only when a content item is missing or stale in Elasticsearch. '
   + 'Use banyan_content_feed_rebuild_public when the public sharing feed is empty or out of order after Redis loss or projection outages. '
@@ -397,7 +397,7 @@ function registerOpsTraceTarget(ctx: Context, config: ResolvedConfig): void {
 function registerOpsRepairTarget(ctx: Context, config: ResolvedConfig): void {
   ctx.tools.register(defineTool({
     name: 'banyan_ops_repair_target',
-    description: 'Run Banyan Server supported target-scoped repair actions after tracing CONTENT, KNOWLEDGE_DOCUMENT, KNOWLEDGE_RAG, or SEARCH_INDEX. Returns a before trace, executed steps, and after trace so the ops Agent can explain what changed.',
+    description: 'Run Banyan Server supported target-scoped repair actions after tracing CONTENT, KNOWLEDGE_DOCUMENT, KNOWLEDGE_RAG, or SEARCH_INDEX. Returns a before trace, executed steps, and after trace so the ops Agent can explain what changed; call banyan_ops_trace_target again afterward to verify the target after-state.',
     parameters: {
       targetType: { type: 'string', description: 'Target type, for example CONTENT, KNOWLEDGE_DOCUMENT, KNOWLEDGE_RAG, or SEARCH_INDEX.' },
       targetId: { type: 'string', description: 'Target id, such as a content id, knowledge document id, workspace id, or search index name.' },
