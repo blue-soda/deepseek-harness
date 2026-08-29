@@ -12,7 +12,8 @@ authorization, audit, and recovery behavior owned by the backend.
 - `banyan_ops_health`: actively check Redis, Elasticsearch, and Kafka connectivity through Banyan Server.
 - `banyan_kafka_lag`: inspect Kafka consumer-group lag for the Banyan outbox projection topic.
 - `banyan_ops_audit_recent`: read recent audited maintenance actions.
-- `banyan_ops_trace_target`: aggregate one target's audit rows, outbox rows, observations, and suggested repair tools.
+- `banyan_ops_requests_recent`: read recent HTTP request traces with method, path, status, duration, actor, and derived business target evidence.
+- `banyan_ops_trace_target`: aggregate one target's audit rows, HTTP request rows, outbox rows, observations, and suggested repair tools.
 - `banyan_ops_repair_target`: run supported target-scoped repairs and return before/steps/after trace evidence.
 - `banyan_content_search`: search shared content through Banyan Search.
 - `banyan_content_cache_inspect`: inspect one Redis content detail cache entry without mutating it.
