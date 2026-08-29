@@ -18,6 +18,8 @@ authorization, audit, and recovery behavior owned by the backend.
 - `banyan_ops_trace_target`: aggregate one target's audit rows, HTTP request rows, service span rows, outbox rows, observations, and suggested repair tools, including `AGENT_RUN` lifecycle traces.
 - `banyan_ops_repair_target`: run supported target-scoped repairs and return before/steps/after trace evidence; use trace -> repair -> trace again when verifying maintenance work.
 - `banyan_content_search`: search shared content through Banyan Search.
+- `banyan_mcp_knowledge_search`: call Banyan MCP `banyan.knowledge.search` for audited Agent knowledge citations.
+- `banyan_mcp_rag_search`: call Banyan MCP `banyan.rag.search` for audited cross-corpus RAG citations from knowledge, posts, and DSH Skills.
 - `banyan_content_cache_inspect`: inspect one Redis content detail cache entry without mutating it.
 - `banyan_content_cache_evict`: evict one content detail cache entry.
 - `banyan_content_cache_warm`: rebuild one content detail cache entry from the database.

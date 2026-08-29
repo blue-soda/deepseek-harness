@@ -49,6 +49,10 @@ export interface Config {
   readonly repairTarget?: boolean
   /** Register content search over Banyan Server search API. */
   readonly contentSearch?: boolean
+  /** Register Agent-facing Banyan MCP knowledge search. */
+  readonly mcpKnowledgeSearch?: boolean
+  /** Register Agent-facing Banyan MCP cross-corpus RAG search. */
+  readonly mcpRagSearch?: boolean
   /** Register Redis reaction cache rebuild action. */
   readonly rebuildReactionCache?: boolean
   /** Register read-only Redis reaction cache inspection. */
@@ -116,6 +120,8 @@ export const Config: z<Config> = z.object({
   traceTarget: z.boolean().default(true),
   repairTarget: z.boolean().default(true),
   contentSearch: z.boolean().default(true),
+  mcpKnowledgeSearch: z.boolean().default(true),
+  mcpRagSearch: z.boolean().default(true),
   rebuildReactionCache: z.boolean().default(true),
   inspectReactionCache: z.boolean().default(true),
   rebuildPublishedReactionCaches: z.boolean().default(true),
@@ -159,6 +165,8 @@ interface ResolvedConfig {
   readonly traceTarget: boolean
   readonly repairTarget: boolean
   readonly contentSearch: boolean
+  readonly mcpKnowledgeSearch: boolean
+  readonly mcpRagSearch: boolean
   readonly rebuildReactionCache: boolean
   readonly inspectReactionCache: boolean
   readonly rebuildPublishedReactionCaches: boolean
@@ -189,6 +197,7 @@ interface RequestOptions {
   readonly method?: string
   readonly path: string
   readonly query?: Record<string, string | number | boolean | undefined>
+  readonly body?: unknown
 }
 
 interface BanyanHttpResult {
@@ -216,6 +225,7 @@ const PROMPT_TEXT =
   + 'Use banyan_ops_trace_target when you have a content id, knowledge document id, workspace id, Agent profile id, AgentRun id, or search index name and need one execution-chain report with matching audit rows, HTTP request rows, service span rows, outbox rows, observations, and suggested repair tools. '
   + 'Use banyan_ops_repair_target after tracing one target when you need Banyan Server to run the supported target-scoped repairs and return a before/steps/after repair report; for maintenance work, follow trace -> repair -> trace again so you can verify the target after-state. '
   + 'banyan_content_search searches public/friend/self content through the server search layer, backed by Elasticsearch when enabled. '
+  + 'Use banyan_mcp_knowledge_search when an Agent needs audited knowledge citations through the Banyan MCP endpoint, and use banyan_mcp_rag_search when an Agent needs cross-corpus RAG citations from knowledge, shared posts, and shared DSH Skills with backend evidence. '
   + 'Use banyan_content_cache_inspect and banyan_reaction_cache_inspect before cache repair when possible; use banyan_content_cache_evict or banyan_content_cache_warm for stale content details, banyan_content_counters_rebuild for stale denormalized like/favorite counts, banyan_reaction_cache_rebuild for one stale Redis reaction bitmap, banyan_reaction_cache_rebuild_published after Redis cache loss, and banyan_content_reindex only when a content item is missing or stale in Elasticsearch. '
   + 'Use banyan_content_feed_rebuild_public when the public sharing feed is empty or out of order after Redis loss or projection outages. '
   + 'Use banyan_social_user_stats_rebuild or banyan_social_group_stats_rebuild when friend counts or group member counts look stale after conversation/friend/group events. '
@@ -245,6 +255,8 @@ export function apply(ctx: Context, config: Config): void {
   if (resolved.traceTarget) registerOpsTraceTarget(ctx, resolved)
   if (resolved.repairTarget) registerOpsRepairTarget(ctx, resolved)
   if (resolved.contentSearch) registerContentSearch(ctx, resolved)
+  if (resolved.mcpKnowledgeSearch) registerMcpKnowledgeSearch(ctx, resolved)
+  if (resolved.mcpRagSearch) registerMcpRagSearch(ctx, resolved)
   if (resolved.rebuildReactionCache) registerReactionCacheRebuild(ctx, resolved)
   if (resolved.inspectReactionCache) registerReactionCacheInspect(ctx, resolved)
   if (resolved.rebuildPublishedReactionCaches) registerPublishedReactionCacheRebuild(ctx, resolved)
@@ -501,6 +513,84 @@ function registerContentSearch(ctx: Context, config: ResolvedConfig): void {
       return formatHttpResult(result)
     },
     presentCall: args => ({ card: 'generic', title: 'Search Banyan content', kind: 'read', rawInput: args }),
+  }))
+}
+
+function registerMcpKnowledgeSearch(ctx: Context, config: ResolvedConfig): void {
+  ctx.tools.register(defineTool({
+    name: 'banyan_mcp_knowledge_search',
+    description: 'Call Banyan Server MCP tool banyan.knowledge.search for audited Agent knowledge citations. Use when answering from Banyan knowledge documents and cite returned document/chunk evidence.',
+    parameters: {
+      query: { type: 'string', required: true, description: 'RAG query text.' },
+      workspaceId: { type: 'string', description: 'Banyan workspace id. Defaults to the backend default workspace when omitted.' },
+      scope: { type: 'string', enum: ['public', 'workspace', 'friends', 'self'], description: 'Permission scope. Defaults to workspace.' },
+      cursor: { type: 'string', description: 'Optional search_after cursor from the previous MCP response.' },
+      limit: { type: 'integer', description: 'Citation limit. Defaults to 5, maximum enforced by Banyan Server.' },
+      agentProfileId: { type: 'string', description: 'Optional Agent profile id to include in backend audit evidence.' },
+      toolCallId: { type: 'string', description: 'Optional caller-stable tool call id for backend audit evidence.' },
+    },
+    output: TEXT_OUTPUT,
+    timeoutMs: config.timeoutMs,
+    isConcurrencySafe: () => true,
+    execute: async (args) => {
+      const query = args as Record<string, unknown>
+      return formatHttpResult(await requestJson(config, {
+        method: 'POST',
+        path: '/mcp/tools/knowledge.search',
+        body: {
+          query: requireString(args, 'query'),
+          workspaceId: typeof query.workspaceId === 'string' ? query.workspaceId : undefined,
+          scope: typeof query.scope === 'string' ? query.scope : 'workspace',
+          cursor: typeof query.cursor === 'string' ? query.cursor : undefined,
+          limit: readLimit(query.limit, 5),
+          agentProfileId: typeof query.agentProfileId === 'string' ? query.agentProfileId : undefined,
+          toolCallId: typeof query.toolCallId === 'string' ? query.toolCallId : undefined,
+        },
+      }))
+    },
+    presentCall: args => ({ card: 'generic', title: 'Search Banyan MCP knowledge', kind: 'read', rawInput: args }),
+  }))
+}
+
+function registerMcpRagSearch(ctx: Context, config: ResolvedConfig): void {
+  ctx.tools.register(defineTool({
+    name: 'banyan_mcp_rag_search',
+    description: 'Call Banyan Server MCP tool banyan.rag.search for audited cross-corpus RAG citations from knowledge documents, shared posts, and shared DSH Skills. Use for resume-facing Agent RAG answers that need backend/citation evidence.',
+    parameters: {
+      query: { type: 'string', required: true, description: 'RAG query text.' },
+      workspaceId: { type: 'string', description: 'Banyan workspace id. Defaults to the backend default workspace when omitted.' },
+      scope: { type: 'string', enum: ['public', 'workspace', 'friends', 'self'], description: 'Permission scope. Defaults to workspace.' },
+      corpus: { type: 'string', enum: ['all', 'knowledge', 'content', 'skills'], description: 'Corpus selector. Defaults to all.' },
+      knowledgeCursor: { type: 'string', description: 'Optional knowledge corpus cursor.' },
+      contentCursor: { type: 'string', description: 'Optional shared post corpus cursor.' },
+      skillCursor: { type: 'string', description: 'Optional shared DSH Skill corpus cursor.' },
+      limit: { type: 'integer', description: 'Citation limit. Defaults to 10, maximum enforced by Banyan Server.' },
+      agentProfileId: { type: 'string', description: 'Optional Agent profile id to include in backend audit evidence.' },
+      toolCallId: { type: 'string', description: 'Optional caller-stable tool call id for backend audit evidence.' },
+    },
+    output: TEXT_OUTPUT,
+    timeoutMs: config.timeoutMs,
+    isConcurrencySafe: () => true,
+    execute: async (args) => {
+      const query = args as Record<string, unknown>
+      return formatHttpResult(await requestJson(config, {
+        method: 'POST',
+        path: '/mcp/tools/rag.search',
+        body: {
+          query: requireString(args, 'query'),
+          workspaceId: typeof query.workspaceId === 'string' ? query.workspaceId : undefined,
+          scope: typeof query.scope === 'string' ? query.scope : 'workspace',
+          corpus: typeof query.corpus === 'string' ? query.corpus : 'all',
+          knowledgeCursor: typeof query.knowledgeCursor === 'string' ? query.knowledgeCursor : undefined,
+          contentCursor: typeof query.contentCursor === 'string' ? query.contentCursor : undefined,
+          skillCursor: typeof query.skillCursor === 'string' ? query.skillCursor : undefined,
+          limit: readLimit(query.limit, 10),
+          agentProfileId: typeof query.agentProfileId === 'string' ? query.agentProfileId : undefined,
+          toolCallId: typeof query.toolCallId === 'string' ? query.toolCallId : undefined,
+        },
+      }))
+    },
+    presentCall: args => ({ card: 'generic', title: 'Search Banyan MCP RAG', kind: 'read', rawInput: args }),
   }))
 }
 
@@ -1005,6 +1095,9 @@ async function requestJson(config: ResolvedConfig, options: RequestOptions): Pro
   if (method !== 'GET' && approvalToken !== undefined && approvalToken.length > 0) {
     headers['x-banyan-ops-approval'] = approvalToken
   }
+  if (options.body !== undefined) {
+    headers['content-type'] = 'application/json'
+  }
 
   const controller = new AbortController()
   const started = Date.now()
@@ -1013,6 +1106,7 @@ async function requestJson(config: ResolvedConfig, options: RequestOptions): Pro
     const response = await fetch(url, {
       method,
       headers,
+      body: options.body === undefined ? undefined : JSON.stringify(options.body),
       signal: controller.signal,
     })
     const bodyText = await response.text()
@@ -1097,6 +1191,8 @@ function resolveConfig(config: Config): ResolvedConfig {
     traceTarget: config.traceTarget ?? true,
     repairTarget: config.repairTarget ?? true,
     contentSearch: config.contentSearch ?? true,
+    mcpKnowledgeSearch: config.mcpKnowledgeSearch ?? true,
+    mcpRagSearch: config.mcpRagSearch ?? true,
     rebuildReactionCache: config.rebuildReactionCache ?? true,
     inspectReactionCache: config.inspectReactionCache ?? true,
     rebuildPublishedReactionCaches: config.rebuildPublishedReactionCaches ?? true,
