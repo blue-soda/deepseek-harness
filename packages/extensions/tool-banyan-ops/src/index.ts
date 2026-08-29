@@ -213,7 +213,7 @@ const PROMPT_TEXT =
   + 'Use banyan_ops_requests_recent to inspect recent HTTP request traces with method, path, status, duration, actor, and business target evidence when debugging API execution chains. '
   + 'Use banyan_ops_request_summary first when you need a compact slow/error request summary grouped by route and business target before drilling into one target trace. '
   + 'Use banyan_ops_spans_recent to inspect internal service spans such as RAG corpus fan-out and target repair steps with durationMs and business target evidence. '
-  + 'Use banyan_ops_trace_target when you have a content id, knowledge document id, workspace id, Agent profile id, or search index name and need one execution-chain report with matching audit rows, HTTP request rows, service span rows, outbox rows, observations, and suggested repair tools. '
+  + 'Use banyan_ops_trace_target when you have a content id, knowledge document id, workspace id, Agent profile id, AgentRun id, or search index name and need one execution-chain report with matching audit rows, HTTP request rows, service span rows, outbox rows, observations, and suggested repair tools. '
   + 'Use banyan_ops_repair_target after tracing one target when you need Banyan Server to run the supported target-scoped repairs and return a before/steps/after repair report. '
   + 'banyan_content_search searches public/friend/self content through the server search layer, backed by Elasticsearch when enabled. '
   + 'Use banyan_content_cache_inspect and banyan_reaction_cache_inspect before cache repair when possible; use banyan_content_cache_evict or banyan_content_cache_warm for stale content details, banyan_content_counters_rebuild for stale denormalized like/favorite counts, banyan_reaction_cache_rebuild for one stale Redis reaction bitmap, banyan_reaction_cache_rebuild_published after Redis cache loss, and banyan_content_reindex only when a content item is missing or stale in Elasticsearch. '
@@ -368,10 +368,10 @@ function registerOpsSpansRecent(ctx: Context, config: ResolvedConfig): void {
 function registerOpsTraceTarget(ctx: Context, config: ResolvedConfig): void {
   ctx.tools.register(defineTool({
     name: 'banyan_ops_trace_target',
-    description: 'Read one Banyan execution-chain report for a target such as CONTENT, KNOWLEDGE_DOCUMENT, KNOWLEDGE_RAG, SEARCH_INDEX, AGENT_PROFILE, or CONVERSATION. Returns matching ops audit rows, HTTP request rows, service span rows, outbox rows, status counts, observations, and suggested repair tools.',
+    description: 'Read one Banyan execution-chain report for a target such as CONTENT, KNOWLEDGE_DOCUMENT, KNOWLEDGE_RAG, SEARCH_INDEX, AGENT_PROFILE, AGENT_RUN, or CONVERSATION. Returns matching ops audit rows, HTTP request rows, service span rows, outbox rows, status counts, observations, and suggested repair tools.',
     parameters: {
-      targetType: { type: 'string', description: 'Target type, for example CONTENT, KNOWLEDGE_DOCUMENT, KNOWLEDGE_RAG, SEARCH_INDEX, AGENT_PROFILE, or CONVERSATION.' },
-      targetId: { type: 'string', description: 'Target id, such as a content id, knowledge document id, workspace id, search index name, agent profile id, or conversation id.' },
+      targetType: { type: 'string', description: 'Target type, for example CONTENT, KNOWLEDGE_DOCUMENT, KNOWLEDGE_RAG, SEARCH_INDEX, AGENT_PROFILE, AGENT_RUN, or CONVERSATION.' },
+      targetId: { type: 'string', description: 'Target id, such as a content id, knowledge document id, workspace id, search index name, agent profile id, AgentRun id, or conversation id.' },
       auditLimit: { type: 'integer', description: 'Maximum matching audit rows to return. Defaults to 20, maximum enforced by Banyan Server.' },
       outboxLimit: { type: 'integer', description: 'Maximum matching outbox rows to return. Defaults to 50, maximum enforced by Banyan Server.' },
     },
