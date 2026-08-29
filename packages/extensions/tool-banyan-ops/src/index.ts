@@ -47,6 +47,10 @@ export interface Config {
   readonly traceTarget?: boolean
   /** Register target-scoped trace-driven repair actions. */
   readonly repairTarget?: boolean
+  /** Register drill action that marks one existing outbox event as failed. */
+  readonly drillOutboxFailure?: boolean
+  /** Register drill action that overwrites one content item's counters with stale values. */
+  readonly drillStaleContentCounters?: boolean
   /** Register content search over Banyan Server search API. */
   readonly contentSearch?: boolean
   /** Register Agent-facing Banyan MCP knowledge search. */
@@ -63,6 +67,8 @@ export interface Config {
   readonly evictContentCache?: boolean
   /** Register read-only Redis content detail cache inspection. */
   readonly inspectContentCache?: boolean
+  /** Register read-only Redis content detail cache runtime metrics. */
+  readonly inspectContentCacheMetrics?: boolean
   /** Register Redis content detail cache warm action. */
   readonly warmContentCache?: boolean
   /** Register denormalized content reaction counter rebuild action. */
@@ -119,6 +125,8 @@ export const Config: z<Config> = z.object({
   spansRecent: z.boolean().default(true),
   traceTarget: z.boolean().default(true),
   repairTarget: z.boolean().default(true),
+  drillOutboxFailure: z.boolean().default(true),
+  drillStaleContentCounters: z.boolean().default(true),
   contentSearch: z.boolean().default(true),
   mcpKnowledgeSearch: z.boolean().default(true),
   mcpRagSearch: z.boolean().default(true),
@@ -127,6 +135,7 @@ export const Config: z<Config> = z.object({
   rebuildPublishedReactionCaches: z.boolean().default(true),
   evictContentCache: z.boolean().default(true),
   inspectContentCache: z.boolean().default(true),
+  inspectContentCacheMetrics: z.boolean().default(true),
   warmContentCache: z.boolean().default(true),
   rebuildContentCounters: z.boolean().default(true),
   rebuildPublishedContentCounters: z.boolean().default(true),
@@ -164,6 +173,8 @@ interface ResolvedConfig {
   readonly spansRecent: boolean
   readonly traceTarget: boolean
   readonly repairTarget: boolean
+  readonly drillOutboxFailure: boolean
+  readonly drillStaleContentCounters: boolean
   readonly contentSearch: boolean
   readonly mcpKnowledgeSearch: boolean
   readonly mcpRagSearch: boolean
@@ -172,6 +183,7 @@ interface ResolvedConfig {
   readonly rebuildPublishedReactionCaches: boolean
   readonly evictContentCache: boolean
   readonly inspectContentCache: boolean
+  readonly inspectContentCacheMetrics: boolean
   readonly warmContentCache: boolean
   readonly rebuildContentCounters: boolean
   readonly rebuildPublishedContentCounters: boolean
@@ -224,9 +236,10 @@ const PROMPT_TEXT =
   + 'Use banyan_ops_spans_recent to inspect internal service spans such as RAG corpus fan-out and target repair steps with durationMs and business target evidence. '
   + 'Use banyan_ops_trace_target when you have a content id, knowledge document id, workspace id, Agent profile id, AgentRun id, or search index name and need one execution-chain report with matching audit rows, HTTP request rows, service span rows, outbox rows, observations, and suggested repair tools. '
   + 'Use banyan_ops_repair_target after tracing one target when you need Banyan Server to run the supported target-scoped repairs and return a before/steps/after repair report; for maintenance work, follow trace -> repair -> trace again so you can verify the target after-state. '
+  + 'Use banyan_ops_drill_outbox_failure and banyan_ops_drill_stale_content_counters only for explicit reliability drills or tests, then prove recovery with banyan_ops_trace_target -> banyan_ops_repair_target -> banyan_ops_trace_target. '
   + 'banyan_content_search searches public/friend/self content through the server search layer, backed by Elasticsearch when enabled. '
-  + 'Use banyan_mcp_knowledge_search when an Agent needs audited knowledge citations through the Banyan MCP endpoint, and use banyan_mcp_rag_search when an Agent needs cross-corpus RAG citations from knowledge, shared posts, and shared DSH Skills with backend evidence. '
-  + 'Use banyan_content_cache_inspect and banyan_reaction_cache_inspect before cache repair when possible; use banyan_content_cache_evict or banyan_content_cache_warm for stale content details, banyan_content_counters_rebuild for stale denormalized like/favorite counts, banyan_reaction_cache_rebuild for one stale Redis reaction bitmap, banyan_reaction_cache_rebuild_published after Redis cache loss, and banyan_content_reindex only when a content item is missing or stale in Elasticsearch. '
+  + 'Use banyan_mcp_knowledge_search when an Agent needs audited knowledge citations through the Banyan MCP endpoint, and use banyan_mcp_rag_search when an Agent needs cross-corpus RAG citations from knowledge, shared posts, group-space posts, and shared DSH Skills with backend evidence and quality scoring. '
+  + 'Use banyan_content_cache_metrics to inspect content cache hit rate, loader calls, single-flight coalescing, and hotspot candidates; use banyan_content_cache_inspect and banyan_reaction_cache_inspect before cache repair when possible; use banyan_content_cache_evict or banyan_content_cache_warm for stale content details, banyan_content_counters_rebuild for stale denormalized like/favorite counts, banyan_reaction_cache_rebuild for one stale Redis reaction bitmap, banyan_reaction_cache_rebuild_published after Redis cache loss, and banyan_content_reindex only when a content item is missing or stale in Elasticsearch. '
   + 'Use banyan_content_feed_rebuild_public when the public sharing feed is empty or out of order after Redis loss or projection outages. '
   + 'Use banyan_social_user_stats_rebuild or banyan_social_group_stats_rebuild when friend counts or group member counts look stale after conversation/friend/group events. '
   + 'Use banyan_content_index_inspect before Elasticsearch maintenance to check whether the content index exists and how many documents it contains, banyan_content_index_ensure if the index may be missing, and banyan_content_reindex_published to rebuild a bounded page of published content. '
@@ -254,6 +267,8 @@ export function apply(ctx: Context, config: Config): void {
   if (resolved.spansRecent) registerOpsSpansRecent(ctx, resolved)
   if (resolved.traceTarget) registerOpsTraceTarget(ctx, resolved)
   if (resolved.repairTarget) registerOpsRepairTarget(ctx, resolved)
+  if (resolved.drillOutboxFailure) registerOpsDrillOutboxFailure(ctx, resolved)
+  if (resolved.drillStaleContentCounters) registerOpsDrillStaleContentCounters(ctx, resolved)
   if (resolved.contentSearch) registerContentSearch(ctx, resolved)
   if (resolved.mcpKnowledgeSearch) registerMcpKnowledgeSearch(ctx, resolved)
   if (resolved.mcpRagSearch) registerMcpRagSearch(ctx, resolved)
@@ -262,6 +277,7 @@ export function apply(ctx: Context, config: Config): void {
   if (resolved.rebuildPublishedReactionCaches) registerPublishedReactionCacheRebuild(ctx, resolved)
   if (resolved.evictContentCache) registerContentCacheEvict(ctx, resolved)
   if (resolved.inspectContentCache) registerContentCacheInspect(ctx, resolved)
+  if (resolved.inspectContentCacheMetrics) registerContentCacheMetrics(ctx, resolved)
   if (resolved.warmContentCache) registerContentCacheWarm(ctx, resolved)
   if (resolved.rebuildContentCounters) registerContentCountersRebuild(ctx, resolved)
   if (resolved.rebuildPublishedContentCounters) registerPublishedContentCountersRebuild(ctx, resolved)
@@ -433,6 +449,58 @@ function registerOpsRepairTarget(ctx: Context, config: ResolvedConfig): void {
   }))
 }
 
+function registerOpsDrillOutboxFailure(ctx: Context, config: ResolvedConfig): void {
+  ctx.tools.register(defineTool({
+    name: 'banyan_ops_drill_outbox_failure',
+    description: 'Inject a controlled Banyan outbox failure by marking one existing outbox event FAILED. Use only for explicit reliability drills, then verify recovery with trace -> repair -> trace.',
+    parameters: {
+      eventId: { type: 'string', required: true, description: 'Existing Banyan outbox event id to mark FAILED.' },
+      message: { type: 'string', description: 'Failure message to store on the event. Defaults to a drill marker.' },
+    },
+    output: TEXT_OUTPUT,
+    timeoutMs: config.timeoutMs,
+    execute: async (args) => {
+      const query = args as Record<string, unknown>
+      const eventId = requireString(args, 'eventId')
+      return formatHttpResult(await requestJson(config, {
+        method: 'POST',
+        path: `/ops/drills/outbox/${encodeURIComponent(eventId)}/mark-failed`,
+        query: {
+          message: typeof query.message === 'string' ? query.message : undefined,
+        },
+      }))
+    },
+    presentCall: args => ({ card: 'generic', title: 'Inject Banyan outbox failure drill', kind: 'edit', rawInput: args }),
+  }))
+}
+
+function registerOpsDrillStaleContentCounters(ctx: Context, config: ResolvedConfig): void {
+  ctx.tools.register(defineTool({
+    name: 'banyan_ops_drill_stale_content_counters',
+    description: 'Inject stale denormalized like/favorite counters for one Banyan content item. Use only for explicit cache/count repair drills, then verify recovery with trace -> repair -> trace.',
+    parameters: {
+      contentId: { type: 'string', required: true, description: 'Banyan shared content ID.' },
+      likeCount: { type: 'integer', description: 'Injected likeCount. Defaults to 999.' },
+      favoriteCount: { type: 'integer', description: 'Injected favoriteCount. Defaults to 999.' },
+    },
+    output: TEXT_OUTPUT,
+    timeoutMs: config.timeoutMs,
+    execute: async (args) => {
+      const query = args as Record<string, unknown>
+      const contentId = requireString(args, 'contentId')
+      return formatHttpResult(await requestJson(config, {
+        method: 'POST',
+        path: `/ops/drills/contents/${encodeURIComponent(contentId)}/stale-counters`,
+        query: {
+          likeCount: readLimit(query.likeCount, 999),
+          favoriteCount: readLimit(query.favoriteCount, 999),
+        },
+      }))
+    },
+    presentCall: args => ({ card: 'generic', title: 'Inject Banyan stale counter drill', kind: 'edit', rawInput: args }),
+  }))
+}
+
 function registerOpsStatus(ctx: Context, config: ResolvedConfig): void {
   ctx.tools.register(defineTool({
     name: 'banyan_ops_status',
@@ -492,6 +560,8 @@ function registerContentSearch(ctx: Context, config: ResolvedConfig): void {
       q: { type: 'string', description: 'Search query. Empty string returns recent visible content.' },
       kind: { type: 'string', enum: ['POST', 'DSH_SKILL'], description: 'Optional content kind filter.' },
       scope: { type: 'string', enum: ['public', 'friends', 'self'], description: 'Visibility scope. Defaults to public.' },
+      spaceType: { type: 'string', enum: ['GROUP'], description: 'Optional content space type for group-space search.' },
+      spaceId: { type: 'string', description: 'Optional group subject id for group-space search.' },
       cursor: { type: 'string', description: 'Optional search_after cursor from the previous response.' },
       limit: { type: 'integer', description: 'Result limit. Defaults to 10, maximum enforced by Banyan Server.' },
     },
@@ -506,6 +576,8 @@ function registerContentSearch(ctx: Context, config: ResolvedConfig): void {
           q: typeof query.q === 'string' ? query.q : '',
           kind: typeof query.kind === 'string' ? query.kind : undefined,
           scope: typeof query.scope === 'string' ? query.scope : 'public',
+          spaceType: typeof query.spaceType === 'string' ? query.spaceType : undefined,
+          spaceId: typeof query.spaceId === 'string' ? query.spaceId : undefined,
           cursor: typeof query.cursor === 'string' ? query.cursor : undefined,
           limit: readLimit(query.limit),
         },
@@ -561,6 +633,8 @@ function registerMcpRagSearch(ctx: Context, config: ResolvedConfig): void {
       workspaceId: { type: 'string', description: 'Banyan workspace id. Defaults to the backend default workspace when omitted.' },
       scope: { type: 'string', enum: ['public', 'workspace', 'friends', 'self'], description: 'Permission scope. Defaults to workspace.' },
       corpus: { type: 'string', enum: ['all', 'knowledge', 'content', 'skills'], description: 'Corpus selector. Defaults to all.' },
+      spaceType: { type: 'string', enum: ['GROUP'], description: 'Optional shared-content space type for group-space RAG.' },
+      spaceId: { type: 'string', description: 'Optional group subject id for group-space RAG.' },
       knowledgeCursor: { type: 'string', description: 'Optional knowledge corpus cursor.' },
       contentCursor: { type: 'string', description: 'Optional shared post corpus cursor.' },
       skillCursor: { type: 'string', description: 'Optional shared DSH Skill corpus cursor.' },
@@ -581,6 +655,8 @@ function registerMcpRagSearch(ctx: Context, config: ResolvedConfig): void {
           workspaceId: typeof query.workspaceId === 'string' ? query.workspaceId : undefined,
           scope: typeof query.scope === 'string' ? query.scope : 'workspace',
           corpus: typeof query.corpus === 'string' ? query.corpus : 'all',
+          spaceType: typeof query.spaceType === 'string' ? query.spaceType : undefined,
+          spaceId: typeof query.spaceId === 'string' ? query.spaceId : undefined,
           knowledgeCursor: typeof query.knowledgeCursor === 'string' ? query.knowledgeCursor : undefined,
           contentCursor: typeof query.contentCursor === 'string' ? query.contentCursor : undefined,
           skillCursor: typeof query.skillCursor === 'string' ? query.skillCursor : undefined,
@@ -699,6 +775,29 @@ function registerContentCacheInspect(ctx: Context, config: ResolvedConfig): void
       }))
     },
     presentCall: args => ({ card: 'generic', title: 'Inspect Banyan content cache', kind: 'read', rawInput: args }),
+  }))
+}
+
+function registerContentCacheMetrics(ctx: Context, config: ResolvedConfig): void {
+  ctx.tools.register(defineTool({
+    name: 'banyan_content_cache_metrics',
+    description: 'Read Banyan content-detail cache runtime metrics: total lookups, hits, misses, hitRate, loader calls, single-flight coalescing, and top hotspot candidates. Use before and after cache warm/repair drills.',
+    parameters: {
+      limit: { type: 'integer', description: 'Maximum hotspot content rows to return. Defaults to 20, maximum enforced by Banyan Server.' },
+    },
+    output: TEXT_OUTPUT,
+    timeoutMs: config.timeoutMs,
+    isConcurrencySafe: () => true,
+    execute: async (args) => {
+      const query = args as Record<string, unknown>
+      return formatHttpResult(await requestJson(config, {
+        path: '/ops/cache/contents/metrics',
+        query: {
+          limit: readLimit(query.limit, 20),
+        },
+      }))
+    },
+    presentCall: args => ({ card: 'generic', title: 'Read Banyan content cache metrics', kind: 'read', rawInput: args }),
   }))
 }
 
@@ -1190,6 +1289,8 @@ function resolveConfig(config: Config): ResolvedConfig {
     spansRecent: config.spansRecent ?? true,
     traceTarget: config.traceTarget ?? true,
     repairTarget: config.repairTarget ?? true,
+    drillOutboxFailure: config.drillOutboxFailure ?? true,
+    drillStaleContentCounters: config.drillStaleContentCounters ?? true,
     contentSearch: config.contentSearch ?? true,
     mcpKnowledgeSearch: config.mcpKnowledgeSearch ?? true,
     mcpRagSearch: config.mcpRagSearch ?? true,
@@ -1198,6 +1299,7 @@ function resolveConfig(config: Config): ResolvedConfig {
     rebuildPublishedReactionCaches: config.rebuildPublishedReactionCaches ?? true,
     evictContentCache: config.evictContentCache ?? true,
     inspectContentCache: config.inspectContentCache ?? true,
+    inspectContentCacheMetrics: config.inspectContentCacheMetrics ?? true,
     warmContentCache: config.warmContentCache ?? true,
     rebuildContentCounters: config.rebuildContentCounters ?? true,
     rebuildPublishedContentCounters: config.rebuildPublishedContentCounters ?? true,
