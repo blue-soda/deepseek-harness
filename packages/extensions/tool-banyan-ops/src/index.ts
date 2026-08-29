@@ -51,6 +51,8 @@ export interface Config {
   readonly drillOutboxFailure?: boolean
   /** Register drill action that overwrites one content item's counters with stale values. */
   readonly drillStaleContentCounters?: boolean
+  /** Register drill action that expires one pending upload and optionally seeds a stale local file. */
+  readonly drillExpiredUpload?: boolean
   /** Register content search over Banyan Server search API. */
   readonly contentSearch?: boolean
   /** Register Agent-facing Banyan MCP knowledge search. */
@@ -127,6 +129,7 @@ export const Config: z<Config> = z.object({
   repairTarget: z.boolean().default(true),
   drillOutboxFailure: z.boolean().default(true),
   drillStaleContentCounters: z.boolean().default(true),
+  drillExpiredUpload: z.boolean().default(true),
   contentSearch: z.boolean().default(true),
   mcpKnowledgeSearch: z.boolean().default(true),
   mcpRagSearch: z.boolean().default(true),
@@ -175,6 +178,7 @@ interface ResolvedConfig {
   readonly repairTarget: boolean
   readonly drillOutboxFailure: boolean
   readonly drillStaleContentCounters: boolean
+  readonly drillExpiredUpload: boolean
   readonly contentSearch: boolean
   readonly mcpKnowledgeSearch: boolean
   readonly mcpRagSearch: boolean
@@ -237,6 +241,7 @@ const PROMPT_TEXT =
   + 'Use banyan_ops_trace_target when you have a content id, knowledge document id, workspace id, Agent profile id, AgentRun id, or search index name and need one execution-chain report with matching audit rows, HTTP request rows, service span rows, outbox rows, observations, and suggested repair tools. '
   + 'Use banyan_ops_repair_target after tracing one target when you need Banyan Server to run the supported target-scoped repairs and return a before/steps/after repair report; for maintenance work, follow trace -> repair -> trace again so you can verify the target after-state. '
   + 'Use banyan_ops_drill_outbox_failure and banyan_ops_drill_stale_content_counters only for explicit reliability drills or tests, then prove recovery with banyan_ops_trace_target -> banyan_ops_repair_target -> banyan_ops_trace_target. '
+  + 'Use banyan_ops_drill_upload_expired only for explicit upload cleanup drills, then prove cleanup with banyan_ops_trace_target for targetType UPLOAD, banyan_upload_cleanup or banyan_ops_repair_target, and banyan_ops_trace_target again. '
   + 'banyan_content_search searches public/friend/self content through the server search layer, backed by Elasticsearch when enabled. '
   + 'Use banyan_mcp_knowledge_search when an Agent needs audited knowledge citations through the Banyan MCP endpoint, and use banyan_mcp_rag_search when an Agent needs cross-corpus RAG citations from knowledge, shared posts, group-space posts, and shared DSH Skills with backend evidence and quality scoring. '
   + 'Use banyan_content_cache_metrics to inspect content cache hit rate, loader calls, single-flight coalescing, and hotspot candidates; use banyan_content_cache_inspect and banyan_reaction_cache_inspect before cache repair when possible; use banyan_content_cache_evict or banyan_content_cache_warm for stale content details, banyan_content_counters_rebuild for stale denormalized like/favorite counts, banyan_reaction_cache_rebuild for one stale Redis reaction bitmap, banyan_reaction_cache_rebuild_published after Redis cache loss, and banyan_content_reindex only when a content item is missing or stale in Elasticsearch. '
@@ -269,6 +274,7 @@ export function apply(ctx: Context, config: Config): void {
   if (resolved.repairTarget) registerOpsRepairTarget(ctx, resolved)
   if (resolved.drillOutboxFailure) registerOpsDrillOutboxFailure(ctx, resolved)
   if (resolved.drillStaleContentCounters) registerOpsDrillStaleContentCounters(ctx, resolved)
+  if (resolved.drillExpiredUpload) registerOpsDrillExpiredUpload(ctx, resolved)
   if (resolved.contentSearch) registerContentSearch(ctx, resolved)
   if (resolved.mcpKnowledgeSearch) registerMcpKnowledgeSearch(ctx, resolved)
   if (resolved.mcpRagSearch) registerMcpRagSearch(ctx, resolved)
@@ -498,6 +504,33 @@ function registerOpsDrillStaleContentCounters(ctx: Context, config: ResolvedConf
       }))
     },
     presentCall: args => ({ card: 'generic', title: 'Inject Banyan stale counter drill', kind: 'edit', rawInput: args }),
+  }))
+}
+
+function registerOpsDrillExpiredUpload(ctx: Context, config: ResolvedConfig): void {
+  ctx.tools.register(defineTool({
+    name: 'banyan_ops_drill_upload_expired',
+    description: 'Inject an expired pending upload drill by moving one pending Banyan upload object into the cleanup window and optionally creating a stale local dev-upload file. Use only for explicit upload cleanup drills, then verify recovery with trace -> cleanup or repair -> trace.',
+    parameters: {
+      uploadObjectId: { type: 'string', required: true, description: 'Existing pending Banyan upload object id.' },
+      expiredSecondsAgo: { type: 'integer', description: 'How far in the past the upload expiry should be moved. Defaults to 60 seconds.' },
+      createLocalFile: { type: 'boolean', description: 'Whether the backend should seed a stale local dev-upload file so cleanup can prove file deletion. Defaults to true.' },
+    },
+    output: TEXT_OUTPUT,
+    timeoutMs: config.timeoutMs,
+    execute: async (args) => {
+      const query = args as Record<string, unknown>
+      const uploadObjectId = requireString(args, 'uploadObjectId')
+      return formatHttpResult(await requestJson(config, {
+        method: 'POST',
+        path: `/ops/drills/uploads/${encodeURIComponent(uploadObjectId)}/expire-pending`,
+        query: {
+          expiredSecondsAgo: readLimit(query.expiredSecondsAgo, 60),
+          createLocalFile: typeof query.createLocalFile === 'boolean' ? query.createLocalFile : undefined,
+        },
+      }))
+    },
+    presentCall: args => ({ card: 'generic', title: 'Inject Banyan expired upload drill', kind: 'edit', rawInput: args }),
   }))
 }
 
@@ -1291,6 +1324,7 @@ function resolveConfig(config: Config): ResolvedConfig {
     repairTarget: config.repairTarget ?? true,
     drillOutboxFailure: config.drillOutboxFailure ?? true,
     drillStaleContentCounters: config.drillStaleContentCounters ?? true,
+    drillExpiredUpload: config.drillExpiredUpload ?? true,
     contentSearch: config.contentSearch ?? true,
     mcpKnowledgeSearch: config.mcpKnowledgeSearch ?? true,
     mcpRagSearch: config.mcpRagSearch ?? true,
