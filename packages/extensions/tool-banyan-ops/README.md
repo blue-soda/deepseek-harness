@@ -11,7 +11,7 @@ authorization, audit, and recovery behavior owned by the backend.
 - `banyan_ops_status`: read entity counts and infrastructure status.
 - `banyan_ops_health`: actively check Redis, Elasticsearch, and Kafka connectivity through Banyan Server.
 - `banyan_ops_target_matrix`: read a compact target.txt capability matrix with pass/partial/warn status, evidence hints, and next tools for Agent triage.
-- `banyan_kafka_lag`: inspect Kafka consumer-group lag for the Banyan outbox projection topic.
+- `banyan_kafka_lag`: inspect Kafka consumer-group lag for the Banyan outbox projection topic, including alert level, warning/critical thresholds, per-partition committed/end offsets, lagging partition count, max lag partition, and suggested action.
 - `banyan_ops_audit_recent`: read recent audited maintenance actions.
 - `banyan_ops_requests_recent`: read recent HTTP request traces with method, path, status, duration, actor, and derived business target evidence.
 - `banyan_ops_request_summary`: summarize recent HTTP request traces by normalized route and business target, including slow/error counts.

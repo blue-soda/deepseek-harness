@@ -247,7 +247,7 @@ const TEXT_OUTPUT = {
 const PROMPT_TEXT =
   'Use Banyan ops tools to inspect and repair the Banyan backend through its audited HTTP API. '
   + 'Start broad with banyan_ops_target_matrix when you need a compact target.txt capability map, pass/partial/warn status, evidence hints, and next tools without loading raw logs into context. '
-  + 'banyan_ops_status is read-only and should be called before maintenance; banyan_ops_health actively checks Redis, Elasticsearch, and Kafka connectivity; banyan_kafka_lag inspects consumer lag for the Canal/Kafka projection topic; banyan_ops_audit_recent shows who recently ran maintenance actions. '
+  + 'banyan_ops_status is read-only and should be called before maintenance; banyan_ops_health actively checks Redis, Elasticsearch, and Kafka connectivity; banyan_kafka_lag inspects consumer lag, alertLevel, thresholds, per-partition offsets, max lag partition, and suggested action for the Canal/Kafka projection topic; banyan_ops_audit_recent shows who recently ran maintenance actions. '
   + 'Use banyan_ops_requests_recent to inspect recent HTTP request traces with method, path, status, duration, actor, and business target evidence when debugging API execution chains. '
   + 'Use banyan_ops_request_summary first when you need a compact slow/error request summary grouped by route and business target before drilling into one target trace. '
   + 'Use banyan_ops_spans_recent to inspect internal service spans such as RAG corpus fan-out and target repair steps with durationMs and business target evidence. '
@@ -255,7 +255,7 @@ const PROMPT_TEXT =
   + 'Use banyan_ops_repair_target after tracing one target when you need Banyan Server to run the supported target-scoped repairs and return a before/steps/after repair report; for maintenance work, follow trace -> repair -> trace again so you can verify the target after-state. '
   + 'Use banyan_ops_drill_outbox_failure, banyan_ops_drill_stale_content_counters, and banyan_ops_drill_stale_reaction_cache only for explicit reliability drills or tests, then prove recovery with banyan_ops_trace_target -> banyan_ops_repair_target -> banyan_ops_trace_target. '
   + 'Use banyan_ops_drill_upload_expired only for explicit upload cleanup drills, then prove cleanup with banyan_ops_trace_target for targetType UPLOAD, banyan_upload_cleanup or banyan_ops_repair_target, and banyan_ops_trace_target again. '
-  + 'Use banyan_ops_drill_kafka_consumer_stop only for explicit Kafka lag drills, then create or wait for new outbox traffic, inspect banyan_kafka_lag, trace targetType KAFKA, repair with banyan_ops_repair_target, and verify lag again. '
+  + 'Use banyan_ops_drill_kafka_consumer_stop only for explicit Kafka lag drills, then create or wait for new outbox traffic, inspect banyan_kafka_lag alertLevel/thresholdExceeded/laggingPartitions/maxPartitionLag, trace targetType KAFKA, repair with banyan_ops_repair_target, and verify lag again. '
   + 'banyan_content_search searches public/friend/self content through the server search layer, backed by Elasticsearch when enabled. '
   + 'Use banyan_mcp_knowledge_search when an Agent needs audited knowledge citations through the Banyan MCP endpoint, and use banyan_mcp_rag_search when an Agent needs cross-corpus RAG citations from knowledge, shared posts, group-space posts, and shared DSH Skills with backend evidence and quality scoring. '
   + 'Use banyan_content_cache_metrics to inspect content cache hit rate, loader calls, single-flight coalescing, and hotspot candidates; use banyan_content_cache_inspect and banyan_reaction_cache_inspect before cache repair when possible; use banyan_content_cache_evict or banyan_content_cache_warm for stale content details, banyan_content_counters_rebuild for stale denormalized like/favorite counts, banyan_reaction_cache_rebuild for one stale Redis reaction bitmap/count cache, banyan_reaction_cache_rebuild_published after Redis cache loss, and banyan_content_reindex only when a content item is missing or stale in Elasticsearch. '
@@ -647,7 +647,7 @@ function registerOpsHealth(ctx: Context, config: ResolvedConfig): void {
 function registerKafkaLag(ctx: Context, config: ResolvedConfig): void {
   ctx.tools.register(defineTool({
     name: 'banyan_kafka_lag',
-    description: 'Inspect Kafka consumer lag for Banyan projection consumers through the audited backend API. Use when Canal/Kafka is healthy but Redis, Elasticsearch, notifications, or feed projections appear delayed.',
+    description: 'Inspect Kafka consumer lag for Banyan projection consumers through the audited backend API. Returns alertLevel, thresholdExceeded, warning/critical thresholds, per-partition committed/end offsets, lagging partition count, max lag partition, offsetSummary, and suggestedAction. Use when Canal/Kafka is healthy but Redis, Elasticsearch, notifications, or feed projections appear delayed.',
     parameters: {
       groupId: { type: 'string', description: 'Optional Kafka consumer group id. Defaults to the Banyan Server consumer group.' },
       topic: { type: 'string', description: 'Optional Kafka topic. Defaults to the Banyan outbox topic.' },
