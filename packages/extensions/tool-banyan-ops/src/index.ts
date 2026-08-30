@@ -53,6 +53,8 @@ export interface Config {
   readonly drillOutboxFailure?: boolean
   /** Register drill action that overwrites one content item's counters with stale values. */
   readonly drillStaleContentCounters?: boolean
+  /** Register drill action that overwrites one content item's Redis reaction count cache with stale values. */
+  readonly drillStaleReactionCache?: boolean
   /** Register drill action that expires one pending upload and optionally seeds a stale local file. */
   readonly drillExpiredUpload?: boolean
   /** Register drill action that stops the Banyan Canal/Kafka outbox consumer to create measurable lag. */
@@ -134,6 +136,7 @@ export const Config: z<Config> = z.object({
   repairTarget: z.boolean().default(true),
   drillOutboxFailure: z.boolean().default(true),
   drillStaleContentCounters: z.boolean().default(true),
+  drillStaleReactionCache: z.boolean().default(true),
   drillExpiredUpload: z.boolean().default(true),
   drillKafkaConsumerStop: z.boolean().default(true),
   contentSearch: z.boolean().default(true),
@@ -185,6 +188,7 @@ interface ResolvedConfig {
   readonly repairTarget: boolean
   readonly drillOutboxFailure: boolean
   readonly drillStaleContentCounters: boolean
+  readonly drillStaleReactionCache: boolean
   readonly drillExpiredUpload: boolean
   readonly drillKafkaConsumerStop: boolean
   readonly contentSearch: boolean
@@ -249,12 +253,12 @@ const PROMPT_TEXT =
   + 'Use banyan_ops_spans_recent to inspect internal service spans such as RAG corpus fan-out and target repair steps with durationMs and business target evidence. '
   + 'Use banyan_ops_trace_target when you have a content id, knowledge document id, workspace id, Agent profile id, AgentRun id, or search index name and need one execution-chain report with matching audit rows, HTTP request rows, service span rows, outbox rows, observations, and suggested repair tools. '
   + 'Use banyan_ops_repair_target after tracing one target when you need Banyan Server to run the supported target-scoped repairs and return a before/steps/after repair report; for maintenance work, follow trace -> repair -> trace again so you can verify the target after-state. '
-  + 'Use banyan_ops_drill_outbox_failure and banyan_ops_drill_stale_content_counters only for explicit reliability drills or tests, then prove recovery with banyan_ops_trace_target -> banyan_ops_repair_target -> banyan_ops_trace_target. '
+  + 'Use banyan_ops_drill_outbox_failure, banyan_ops_drill_stale_content_counters, and banyan_ops_drill_stale_reaction_cache only for explicit reliability drills or tests, then prove recovery with banyan_ops_trace_target -> banyan_ops_repair_target -> banyan_ops_trace_target. '
   + 'Use banyan_ops_drill_upload_expired only for explicit upload cleanup drills, then prove cleanup with banyan_ops_trace_target for targetType UPLOAD, banyan_upload_cleanup or banyan_ops_repair_target, and banyan_ops_trace_target again. '
   + 'Use banyan_ops_drill_kafka_consumer_stop only for explicit Kafka lag drills, then create or wait for new outbox traffic, inspect banyan_kafka_lag, trace targetType KAFKA, repair with banyan_ops_repair_target, and verify lag again. '
   + 'banyan_content_search searches public/friend/self content through the server search layer, backed by Elasticsearch when enabled. '
   + 'Use banyan_mcp_knowledge_search when an Agent needs audited knowledge citations through the Banyan MCP endpoint, and use banyan_mcp_rag_search when an Agent needs cross-corpus RAG citations from knowledge, shared posts, group-space posts, and shared DSH Skills with backend evidence and quality scoring. '
-  + 'Use banyan_content_cache_metrics to inspect content cache hit rate, loader calls, single-flight coalescing, and hotspot candidates; use banyan_content_cache_inspect and banyan_reaction_cache_inspect before cache repair when possible; use banyan_content_cache_evict or banyan_content_cache_warm for stale content details, banyan_content_counters_rebuild for stale denormalized like/favorite counts, banyan_reaction_cache_rebuild for one stale Redis reaction bitmap, banyan_reaction_cache_rebuild_published after Redis cache loss, and banyan_content_reindex only when a content item is missing or stale in Elasticsearch. '
+  + 'Use banyan_content_cache_metrics to inspect content cache hit rate, loader calls, single-flight coalescing, and hotspot candidates; use banyan_content_cache_inspect and banyan_reaction_cache_inspect before cache repair when possible; use banyan_content_cache_evict or banyan_content_cache_warm for stale content details, banyan_content_counters_rebuild for stale denormalized like/favorite counts, banyan_reaction_cache_rebuild for one stale Redis reaction bitmap/count cache, banyan_reaction_cache_rebuild_published after Redis cache loss, and banyan_content_reindex only when a content item is missing or stale in Elasticsearch. '
   + 'Use banyan_content_feed_rebuild_public when the public sharing feed is empty or out of order after Redis loss or projection outages. '
   + 'Use banyan_social_user_stats_rebuild or banyan_social_group_stats_rebuild when friend counts or group member counts look stale after conversation/friend/group events. '
   + 'Use banyan_content_index_inspect before Elasticsearch maintenance to check whether the content index exists and how many documents it contains, banyan_content_index_ensure if the index may be missing, and banyan_content_reindex_published to rebuild a bounded page of published content. '
@@ -285,6 +289,7 @@ export function apply(ctx: Context, config: Config): void {
   if (resolved.repairTarget) registerOpsRepairTarget(ctx, resolved)
   if (resolved.drillOutboxFailure) registerOpsDrillOutboxFailure(ctx, resolved)
   if (resolved.drillStaleContentCounters) registerOpsDrillStaleContentCounters(ctx, resolved)
+  if (resolved.drillStaleReactionCache) registerOpsDrillStaleReactionCache(ctx, resolved)
   if (resolved.drillExpiredUpload) registerOpsDrillExpiredUpload(ctx, resolved)
   if (resolved.drillKafkaConsumerStop) registerOpsDrillKafkaConsumerStop(ctx, resolved)
   if (resolved.contentSearch) registerContentSearch(ctx, resolved)
@@ -539,6 +544,35 @@ function registerOpsDrillStaleContentCounters(ctx: Context, config: ResolvedConf
       }))
     },
     presentCall: args => ({ card: 'generic', title: 'Inject Banyan stale counter drill', kind: 'edit', rawInput: args }),
+  }))
+}
+
+function registerOpsDrillStaleReactionCache(ctx: Context, config: ResolvedConfig): void {
+  ctx.tools.register(defineTool({
+    name: 'banyan_ops_drill_stale_reaction_cache',
+    description: 'Inject stale Redis reaction-cache like/favorite count values for one Banyan content item. Use only for explicit cache/count repair drills, then prove stale reads and recovery with inspect -> trace -> repair -> trace.',
+    parameters: {
+      contentId: { type: 'string', required: true, description: 'Banyan shared content ID.' },
+      likeCount: { type: 'integer', description: 'Injected cached likeCount. Defaults to 999.' },
+      favoriteCount: { type: 'integer', description: 'Injected cached favoriteCount. Defaults to 999.' },
+      viewerUserId: { type: 'string', description: 'Optional Banyan internal user id for inspecting viewer bitmap state alongside count keys.' },
+    },
+    output: TEXT_OUTPUT,
+    timeoutMs: config.timeoutMs,
+    execute: async (args) => {
+      const query = args as Record<string, unknown>
+      const contentId = requireString(args, 'contentId')
+      return formatHttpResult(await requestJson(config, {
+        method: 'POST',
+        path: `/ops/drills/contents/${encodeURIComponent(contentId)}/stale-reaction-cache`,
+        query: {
+          likeCount: readLimit(query.likeCount, 999),
+          favoriteCount: readLimit(query.favoriteCount, 999),
+          viewerUserId: typeof query.viewerUserId === 'string' && query.viewerUserId.length > 0 ? query.viewerUserId : undefined,
+        },
+      }))
+    },
+    presentCall: args => ({ card: 'generic', title: 'Inject Banyan stale reaction cache drill', kind: 'edit', rawInput: args }),
   }))
 }
 
@@ -1285,12 +1319,13 @@ async function requestJson(config: ResolvedConfig, options: RequestOptions): Pro
   const started = Date.now()
   const timeout = setTimeout(() => controller.abort(), config.timeoutMs)
   try {
-    const response = await fetch(url, {
+    const init: RequestInit = {
       method,
       headers,
-      body: options.body === undefined ? undefined : JSON.stringify(options.body),
       signal: controller.signal,
-    })
+    }
+    if (options.body !== undefined) init.body = JSON.stringify(options.body)
+    const response = await fetch(url, init)
     const bodyText = await response.text()
     const value = parseJsonBody(bodyText)
     return {
@@ -1375,6 +1410,7 @@ function resolveConfig(config: Config): ResolvedConfig {
     repairTarget: config.repairTarget ?? true,
     drillOutboxFailure: config.drillOutboxFailure ?? true,
     drillStaleContentCounters: config.drillStaleContentCounters ?? true,
+    drillStaleReactionCache: config.drillStaleReactionCache ?? true,
     drillExpiredUpload: config.drillExpiredUpload ?? true,
     drillKafkaConsumerStop: config.drillKafkaConsumerStop ?? true,
     contentSearch: config.contentSearch ?? true,

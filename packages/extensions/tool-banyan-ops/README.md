@@ -20,6 +20,7 @@ authorization, audit, and recovery behavior owned by the backend.
 - `banyan_ops_repair_target`: run supported target-scoped repairs and return before/steps/after trace evidence; use trace -> repair -> trace again when verifying maintenance work.
 - `banyan_ops_drill_outbox_failure`: mark one existing outbox event as `FAILED` for an explicit reliability drill.
 - `banyan_ops_drill_stale_content_counters`: overwrite one content item's denormalized like/favorite counters for an explicit cache/count repair drill.
+- `banyan_ops_drill_stale_reaction_cache`: overwrite one content item's Redis reaction-cache like/favorite counts for an explicit cache/count repair drill.
 - `banyan_ops_drill_upload_expired`: expire one pending upload object and optionally create a stale local dev-upload file for an explicit upload cleanup drill.
 - `banyan_ops_drill_kafka_consumer_stop`: stop the Banyan Canal/Kafka consumer for a controlled lag drill; verify with `banyan_kafka_lag`, then repair targetType `KAFKA`.
 - `banyan_content_search`: search shared content through Banyan Search.
@@ -35,7 +36,7 @@ authorization, audit, and recovery behavior owned by the backend.
 - `banyan_social_user_stats_rebuild`: rebuild one user's social stats projection, including friend count.
 - `banyan_social_group_stats_rebuild`: rebuild one group's social stats projection, including member count.
 - `banyan_reaction_cache_inspect`: inspect one Redis reaction cache entry without mutating it.
-- `banyan_reaction_cache_rebuild`: rebuild Redis reaction bitmap/cache state for one content item.
+- `banyan_reaction_cache_rebuild`: rebuild Redis reaction bitmap/count cache state for one content item.
 - `banyan_reaction_cache_rebuild_published`: rebuild Redis reaction bitmap/cache state for a bounded page of published content.
 - `banyan_content_reindex`: reindex one content item into Elasticsearch.
 - `banyan_content_index_inspect`: inspect whether the configured Elasticsearch content index exists and how many documents it contains.
