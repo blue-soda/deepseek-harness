@@ -33,6 +33,8 @@ export interface Config {
   readonly status?: boolean
   /** Register read-only infrastructure health checks. */
   readonly health?: boolean
+  /** Register compact target.txt capability matrix for Agent triage. */
+  readonly targetMatrix?: boolean
   /** Register read-only Kafka consumer lag inspection. */
   readonly kafkaLag?: boolean
   /** Register read-only recent operations audit log. */
@@ -122,6 +124,7 @@ export const Config: z<Config> = z.object({
   timeoutMs: z.number().step(1).min(1).default(10_000),
   status: z.boolean().default(true),
   health: z.boolean().default(true),
+  targetMatrix: z.boolean().default(true),
   kafkaLag: z.boolean().default(true),
   auditRecent: z.boolean().default(true),
   requestsRecent: z.boolean().default(true),
@@ -172,6 +175,7 @@ interface ResolvedConfig {
   readonly timeoutMs: number
   readonly status: boolean
   readonly health: boolean
+  readonly targetMatrix: boolean
   readonly kafkaLag: boolean
   readonly auditRecent: boolean
   readonly requestsRecent: boolean
@@ -238,6 +242,7 @@ const TEXT_OUTPUT = {
 
 const PROMPT_TEXT =
   'Use Banyan ops tools to inspect and repair the Banyan backend through its audited HTTP API. '
+  + 'Start broad with banyan_ops_target_matrix when you need a compact target.txt capability map, pass/partial/warn status, evidence hints, and next tools without loading raw logs into context. '
   + 'banyan_ops_status is read-only and should be called before maintenance; banyan_ops_health actively checks Redis, Elasticsearch, and Kafka connectivity; banyan_kafka_lag inspects consumer lag for the Canal/Kafka projection topic; banyan_ops_audit_recent shows who recently ran maintenance actions. '
   + 'Use banyan_ops_requests_recent to inspect recent HTTP request traces with method, path, status, duration, actor, and business target evidence when debugging API execution chains. '
   + 'Use banyan_ops_request_summary first when you need a compact slow/error request summary grouped by route and business target before drilling into one target trace. '
@@ -270,6 +275,7 @@ export function apply(ctx: Context, config: Config): void {
 
   if (resolved.status) registerOpsStatus(ctx, resolved)
   if (resolved.health) registerOpsHealth(ctx, resolved)
+  if (resolved.targetMatrix) registerOpsTargetMatrix(ctx, resolved)
   if (resolved.kafkaLag) registerKafkaLag(ctx, resolved)
   if (resolved.auditRecent) registerOpsAuditRecent(ctx, resolved)
   if (resolved.requestsRecent) registerOpsRequestsRecent(ctx, resolved)
@@ -309,6 +315,29 @@ export function apply(ctx: Context, config: Config): void {
   if (resolved.outboxDiagnostics) registerOutboxDiagnostics(ctx, resolved)
   if (resolved.failedOutboxRecent) registerOutboxFailedRecent(ctx, resolved)
   if (resolved.retryFailedOutbox) registerOutboxRetryFailed(ctx, resolved)
+}
+
+function registerOpsTargetMatrix(ctx: Context, config: ResolvedConfig): void {
+  ctx.tools.register(defineTool({
+    name: 'banyan_ops_target_matrix',
+    description: 'Read a compact target.txt capability matrix from Banyan Server. Use this first when triaging system readiness, deciding which backend/Agent highlight needs evidence, or avoiding context-heavy raw logs.',
+    parameters: {
+      evidenceLimit: { type: 'integer', description: 'Maximum recent audit/request rows the backend may consider when building compact signals. Defaults to 25.' },
+    },
+    output: TEXT_OUTPUT,
+    timeoutMs: config.timeoutMs,
+    isConcurrencySafe: () => true,
+    execute: async (args) => {
+      const query = args as Record<string, unknown>
+      return formatHttpResult(await requestJson(config, {
+        path: '/ops/target-matrix',
+        query: {
+          evidenceLimit: readLimit(query.evidenceLimit, 25),
+        },
+      }))
+    },
+    presentCall: args => ({ card: 'generic', title: 'Read Banyan target matrix', kind: 'read', rawInput: args }),
+  }))
 }
 
 function registerOpsAuditRecent(ctx: Context, config: ResolvedConfig): void {
@@ -1336,6 +1365,7 @@ function resolveConfig(config: Config): ResolvedConfig {
     timeoutMs,
     status: config.status ?? true,
     health: config.health ?? true,
+    targetMatrix: config.targetMatrix ?? true,
     kafkaLag: config.kafkaLag ?? true,
     auditRecent: config.auditRecent ?? true,
     requestsRecent: config.requestsRecent ?? true,
