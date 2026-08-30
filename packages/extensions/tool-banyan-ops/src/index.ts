@@ -257,7 +257,7 @@ const PROMPT_TEXT =
   + 'Use banyan_ops_drill_upload_expired only for explicit upload cleanup drills, then prove cleanup with banyan_ops_trace_target for targetType UPLOAD, banyan_upload_cleanup or banyan_ops_repair_target, and banyan_ops_trace_target again. '
   + 'Use banyan_ops_drill_kafka_consumer_stop only for explicit Kafka lag drills, then create or wait for new outbox traffic, inspect banyan_kafka_lag alertLevel/thresholdExceeded/laggingPartitions/maxPartitionLag, trace targetType KAFKA, repair with banyan_ops_repair_target, and verify lag again. '
   + 'banyan_content_search searches public/friend/self content through the server search layer, backed by Elasticsearch when enabled. '
-  + 'Use banyan_mcp_knowledge_search when an Agent needs audited knowledge citations through the Banyan MCP endpoint, and use banyan_mcp_rag_search when an Agent needs cross-corpus RAG citations from knowledge, shared posts, group-space posts, and shared DSH Skills with backend evidence and quality scoring. '
+  + 'Use banyan_mcp_knowledge_search when an Agent needs audited knowledge citations through the Banyan MCP endpoint, and use banyan_mcp_rag_search when an Agent needs cross-corpus RAG citations from knowledge, shared posts, group-space posts, and shared DSH Skills with backend evidence and quality scoring. For RAG answer-quality checks, set requiredCorpora, minCitationCount, minStrongCitationCount, and requireAllQueryTerms so the backend can return pass/fail verdicts, missing corpus coverage, failureReasons, and tuningSuggestions instead of only raw hits. '
   + 'Use banyan_content_cache_metrics to inspect content cache hit rate, loader calls, single-flight coalescing, and hotspot candidates; use banyan_content_cache_inspect and banyan_reaction_cache_inspect before cache repair when possible; use banyan_content_cache_evict or banyan_content_cache_warm for stale content details, banyan_content_counters_rebuild for stale denormalized like/favorite counts, banyan_reaction_cache_rebuild for one stale Redis reaction bitmap/count cache, banyan_reaction_cache_rebuild_published after Redis cache loss, and banyan_content_reindex only when a content item is missing or stale in Elasticsearch. '
   + 'Use banyan_content_feed_rebuild_public when the public sharing feed is empty or out of order after Redis loss or projection outages. '
   + 'Use banyan_social_user_stats_rebuild or banyan_social_group_stats_rebuild when friend counts or group member counts look stale after conversation/friend/group events. '
@@ -744,7 +744,7 @@ function registerMcpKnowledgeSearch(ctx: Context, config: ResolvedConfig): void 
 function registerMcpRagSearch(ctx: Context, config: ResolvedConfig): void {
   ctx.tools.register(defineTool({
     name: 'banyan_mcp_rag_search',
-    description: 'Call Banyan Server MCP tool banyan.rag.search for audited cross-corpus RAG citations from knowledge documents, shared posts, and shared DSH Skills. Use for resume-facing Agent RAG answers that need backend/citation evidence.',
+    description: 'Call Banyan Server MCP tool banyan.rag.search for audited cross-corpus RAG citations from knowledge documents, shared posts, and shared DSH Skills. Use for resume-facing Agent RAG answers that need backend/citation evidence, quality verdicts, missing corpus coverage, failure reasons, and tuning suggestions.',
     parameters: {
       query: { type: 'string', required: true, description: 'RAG query text.' },
       workspaceId: { type: 'string', description: 'Banyan workspace id. Defaults to the backend default workspace when omitted.' },
@@ -755,6 +755,10 @@ function registerMcpRagSearch(ctx: Context, config: ResolvedConfig): void {
       knowledgeCursor: { type: 'string', description: 'Optional knowledge corpus cursor.' },
       contentCursor: { type: 'string', description: 'Optional shared post corpus cursor.' },
       skillCursor: { type: 'string', description: 'Optional shared DSH Skill corpus cursor.' },
+      requiredCorpora: { type: 'array', items: { type: 'string', enum: ['knowledge', 'content', 'skills'] }, description: 'Optional corpus coverage required for quality.pass.' },
+      minCitationCount: { type: 'integer', description: 'Minimum citation count required for quality.pass.' },
+      minStrongCitationCount: { type: 'integer', description: 'Minimum strong citation count required for quality.pass.' },
+      requireAllQueryTerms: { type: 'boolean', description: 'Require every normalized query term to appear in returned citation text.' },
       limit: { type: 'integer', description: 'Citation limit. Defaults to 10, maximum enforced by Banyan Server.' },
       agentProfileId: { type: 'string', description: 'Optional Agent profile id to include in backend audit evidence.' },
       toolCallId: { type: 'string', description: 'Optional caller-stable tool call id for backend audit evidence.' },
@@ -777,6 +781,10 @@ function registerMcpRagSearch(ctx: Context, config: ResolvedConfig): void {
           knowledgeCursor: typeof query.knowledgeCursor === 'string' ? query.knowledgeCursor : undefined,
           contentCursor: typeof query.contentCursor === 'string' ? query.contentCursor : undefined,
           skillCursor: typeof query.skillCursor === 'string' ? query.skillCursor : undefined,
+          requiredCorpora: readStringArray(query.requiredCorpora),
+          minCitationCount: readLimit(query.minCitationCount, 1),
+          minStrongCitationCount: readLimit(query.minStrongCitationCount, 1),
+          requireAllQueryTerms: typeof query.requireAllQueryTerms === 'boolean' ? query.requireAllQueryTerms : undefined,
           limit: readLimit(query.limit, 10),
           agentProfileId: typeof query.agentProfileId === 'string' ? query.agentProfileId : undefined,
           toolCallId: typeof query.toolCallId === 'string' ? query.toolCallId : undefined,
@@ -1373,6 +1381,12 @@ function formatHttpResult(result: BanyanHttpResult): string {
 
 function readLimit(value: unknown, defaultValue = 10): number {
   return Number.isSafeInteger(value) && Number(value) > 0 ? Number(value) : defaultValue
+}
+
+function readStringArray(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  const items = value.filter((item): item is string => typeof item === 'string' && item.length > 0)
+  return items.length > 0 ? items : undefined
 }
 
 function requireString(args: unknown, key: string): string {

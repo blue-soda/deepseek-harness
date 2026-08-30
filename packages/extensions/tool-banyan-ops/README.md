@@ -25,7 +25,7 @@ authorization, audit, and recovery behavior owned by the backend.
 - `banyan_ops_drill_kafka_consumer_stop`: stop the Banyan Canal/Kafka consumer for a controlled lag drill; verify with `banyan_kafka_lag`, then repair targetType `KAFKA`.
 - `banyan_content_search`: search shared content through Banyan Search.
 - `banyan_mcp_knowledge_search`: call Banyan MCP `banyan.knowledge.search` for audited Agent knowledge citations.
-- `banyan_mcp_rag_search`: call Banyan MCP `banyan.rag.search` for audited cross-corpus RAG citations from knowledge, posts, group-space posts, and DSH Skills with quality scoring.
+- `banyan_mcp_rag_search`: call Banyan MCP `banyan.rag.search` for audited cross-corpus RAG citations from knowledge, posts, group-space posts, and DSH Skills with quality scoring, required corpus coverage, failure reasons, and tuning suggestions.
 - `banyan_content_cache_inspect`: inspect one Redis content detail cache entry without mutating it.
 - `banyan_content_cache_metrics`: inspect content cache hit rate, loader calls, single-flight coalescing, and hotspot candidates.
 - `banyan_content_cache_evict`: evict one content detail cache entry.
