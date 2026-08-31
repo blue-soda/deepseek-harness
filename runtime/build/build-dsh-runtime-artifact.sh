@@ -154,7 +154,7 @@ function toBashPath(file) {
   if (process.platform !== 'win32') return file;
   return file
     .replace(/\\/g, '/')
-    .replace(/^([a-zA-Z]):\//, (_, drive) => `/mnt/${drive.toLowerCase()}/`);
+    .replace(/^([a-zA-Z]):\//, (_, drive) => `/${drive.toLowerCase()}/`);
 }
 
 function walk(dir) {
@@ -210,7 +210,7 @@ function toBashPath(file) {
   if (process.platform !== 'win32') return file;
   return file
     .replace(/\\/g, '/')
-    .replace(/^([a-zA-Z]):\//, (_, drive) => `/mnt/${drive.toLowerCase()}/`);
+    .replace(/^([a-zA-Z]):\//, (_, drive) => `/${drive.toLowerCase()}/`);
 }
 
 function matches(name) {
