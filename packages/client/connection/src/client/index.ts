@@ -62,6 +62,8 @@ export const inject: string[] = []
 export interface ClientTransportHooks {
   /** Optional HTTP origin for shells that host the page outside the DSH origin. */
   baseUrl?: string
+  /** Optional request-local time zone override for native shells with non-IANA WebView zones. */
+  clientTimeZone?: string
   /** Build the API carrier: unary calls plus the two downstream event streams. */
   createApiClient?(): IApiClient
   /** Transport for generic unary RPC channels (the Typert gateway). */
