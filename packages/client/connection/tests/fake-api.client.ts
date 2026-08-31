@@ -148,6 +148,7 @@ export class FakeApiClient implements IApiClient {
     attachment: (payload: unknown) => this.record('session.attachment', payload, this.onAttachment(payload)),
     updateQueue: (payload: unknown) => this.record('session.updateQueue', payload, this.onUpdateQueue(payload)),
     cancel: (payload: unknown) => this.record('session.cancel', payload, this.onCancel(payload)),
+    delete: (payload: unknown) => this.record('session.delete', payload, Promise.resolve(ok({ deleted: true }))),
   }
 
   readonly subagents: IApiClient['subagents'] = {
@@ -174,6 +175,12 @@ export class FakeApiClient implements IApiClient {
     createDirectory: payload => this.record('host.createDirectory', payload, this.onCreateDirectory(payload)),
     copyDirectory: payload => this.record('host.copyDirectory', payload, this.onCopyDirectory(payload)),
     installBanyanSkillPackage: payload => this.record('host.installBanyanSkillPackage', payload, this.onInstallBanyanSkillPackage(payload)),
+    pruneData: payload => this.record('host.pruneData', payload, Promise.resolve(ok({
+      home: '/home/fake',
+      target: (payload as { target?: 'logs' | 'cache' }).target ?? 'cache',
+      files: 0,
+      bytes: 0,
+    }))),
     openPath: payload => this.record('host.openPath', payload, this.onOpenPath(payload)),
   }
 

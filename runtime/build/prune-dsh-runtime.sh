@@ -54,32 +54,53 @@ fi
 # shellcheck source=/dev/null
 source "$RULES_FILE"
 
-before_kb="$(du -sk "$RUNTIME_DIR/node_modules" | awk '{print $1}')"
+if [[ "${DSH_RUNTIME_FAST_STATS:-false}" == "true" ]]; then
+  before_kb=0
+else
+  before_kb="$(du -sk "$RUNTIME_DIR/node_modules" | awk '{print $1}')"
+fi
 removed_entries=0
 removed_files=0
 removed_dirs=0
 removed_symlinks=0
 
 for pattern in ${PRUNE_PNPM_ENTRY_PATTERNS:-}; do
-  while IFS= read -r -d '' entry; do
-    rm -rf "$entry"
-    removed_entries=$((removed_entries + 1))
-  done < <(find "$PNPM_DIR" -mindepth 1 -maxdepth 1 -name "$pattern" -print0 2>/dev/null)
+  count="$(find "$PNPM_DIR" -mindepth 1 -maxdepth 1 -name "$pattern" -print 2>/dev/null | wc -l | awk '{print $1}')"
+  if [[ "$count" -gt 0 ]]; then
+    find "$PNPM_DIR" -mindepth 1 -maxdepth 1 -name "$pattern" -exec rm -rf {} + 2>/dev/null
+    removed_entries=$((removed_entries + count))
+  fi
 done
 
+file_expr=()
 for glob in ${PRUNE_FILE_GLOBS:-}; do
-  while IFS= read -r -d '' file; do
-    rm -f "$file"
-    removed_files=$((removed_files + 1))
-  done < <(find "$RUNTIME_DIR/node_modules" -type f -name "$glob" -print0 2>/dev/null)
+  if [[ "${#file_expr[@]}" -gt 0 ]]; then
+    file_expr+=(-o)
+  fi
+  file_expr+=(-name "$glob")
 done
+if [[ "${#file_expr[@]}" -gt 0 ]]; then
+  count="$(find "$RUNTIME_DIR/node_modules" -type f \( "${file_expr[@]}" \) -print 2>/dev/null | wc -l | awk '{print $1}')"
+  if [[ "$count" -gt 0 ]]; then
+    find "$RUNTIME_DIR/node_modules" -type f \( "${file_expr[@]}" \) -delete 2>/dev/null
+    removed_files=$((removed_files + count))
+  fi
+fi
 
+dir_expr=()
 for dir_name in ${PRUNE_DIR_NAMES:-}; do
-  while IFS= read -r -d '' dir; do
-    rm -rf "$dir"
-    removed_dirs=$((removed_dirs + 1))
-  done < <(find "$RUNTIME_DIR/node_modules" -type d -name "$dir_name" -print0 2>/dev/null)
+  if [[ "${#dir_expr[@]}" -gt 0 ]]; then
+    dir_expr+=(-o)
+  fi
+  dir_expr+=(-name "$dir_name")
 done
+if [[ "${#dir_expr[@]}" -gt 0 ]]; then
+  count="$(find "$RUNTIME_DIR/node_modules" -depth -type d \( "${dir_expr[@]}" \) -print 2>/dev/null | wc -l | awk '{print $1}')"
+  if [[ "$count" -gt 0 ]]; then
+    find "$RUNTIME_DIR/node_modules" -depth -type d \( "${dir_expr[@]}" \) -exec rm -rf {} + 2>/dev/null
+    removed_dirs=$((removed_dirs + count))
+  fi
+fi
 
 for pty in "$PNPM_DIR"/node-pty@*/node_modules/node-pty/prebuilds; do
   [[ -d "$pty" ]] || continue
@@ -89,13 +110,18 @@ for pty in "$PNPM_DIR"/node-pty@*/node_modules/node-pty/prebuilds; do
 done
 
 if [[ "${PRUNE_REMOVE_BROKEN_SYMLINKS:-false}" == "true" ]]; then
-  while IFS= read -r -d '' link; do
-    rm -f "$link"
-    removed_symlinks=$((removed_symlinks + 1))
-  done < <(find "$RUNTIME_DIR/node_modules" -xtype l -print0 2>/dev/null)
+  count="$(find "$RUNTIME_DIR/node_modules" -xtype l -print 2>/dev/null | wc -l | awk '{print $1}')"
+  if [[ "$count" -gt 0 ]]; then
+    find "$RUNTIME_DIR/node_modules" -xtype l -delete 2>/dev/null
+    removed_symlinks=$((removed_symlinks + count))
+  fi
 fi
 
-after_kb="$(du -sk "$RUNTIME_DIR/node_modules" | awk '{print $1}')"
+if [[ "${DSH_RUNTIME_FAST_STATS:-false}" == "true" ]]; then
+  after_kb=0
+else
+  after_kb="$(du -sk "$RUNTIME_DIR/node_modules" | awk '{print $1}')"
+fi
 saved_kb=$((before_kb - after_kb))
 
 cat <<EOF

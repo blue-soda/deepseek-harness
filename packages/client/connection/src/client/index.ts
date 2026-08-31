@@ -60,8 +60,10 @@ export const inject: string[] = []
  * provides both halves here instead of forking this plugin.
  */
 export interface ClientTransportHooks {
+  /** Optional HTTP origin for shells that host the page outside the DSH origin. */
+  baseUrl?: string
   /** Build the API carrier: unary calls plus the two downstream event streams. */
-  createApiClient(): IApiClient
+  createApiClient?(): IApiClient
   /** Transport for generic unary RPC channels (the Typert gateway). */
   fetch: RpcFetch
   /**
@@ -111,7 +113,7 @@ export function apply(ctx: Context): void {
   const fixture = pageLocation !== undefined && new URLSearchParams(pageLocation.search).has('fixture')
   const fixtureClient = fixture ? new FixtureApiClient() : undefined
   const transport = (globalThis as ClientTransportGlobal).__DSH_TRANSPORT__
-  const api: IApiClient = fixtureClient ?? transport?.createApiClient() ?? new WebApiClient()
+  const api: IApiClient = fixtureClient ?? transport?.createApiClient?.() ?? new WebApiClient()
   const rpc = fixtureClient?.rpc ?? createWebConnectionRpc(transport?.fetch)
   let started = false
   let description: HostDescription | undefined

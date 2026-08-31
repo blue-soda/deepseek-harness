@@ -8,11 +8,25 @@ import { HOST_EVENTS_PATH, MUX_EVENTS_PATH } from '../api-path.ts'
 
 type SocketItem<F> = { kind: 'frame'; envelope: RpcRequest<F> } | { kind: 'end' }
 type Parser<F> = { parse(value: unknown): F }
+interface ClientTransportGlobal {
+  __DSH_TRANSPORT__?: {
+    baseUrl?: string
+    fetch?: (input: URL, init?: RequestInit) => Promise<Response>
+  }
+}
+
+function transportHooks() {
+  return (globalThis as ClientTransportGlobal).__DSH_TRANSPORT__
+}
 
 /** Browser platform subclass: unary/respond use fetch; mux/host use downlink-only WebSockets. */
 export class WebApiClient extends AbstractApiClient {
+  protected override resolveBase(): string {
+    return transportHooks()?.baseUrl ?? super.resolveBase()
+  }
+
   protected doFetch(input: URL, init?: RequestInit): Promise<Response> {
-    return globalThis.fetch(input, init)
+    return transportHooks()?.fetch?.(input, init) ?? globalThis.fetch(input, init)
   }
 
   protected override openMux(

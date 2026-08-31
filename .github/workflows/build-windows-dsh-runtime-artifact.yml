@@ -1,4 +1,4 @@
-name: Build DSH Runtime Artifact
+name: Build Windows DSH Runtime Artifact
 
 on:
   workflow_dispatch:
@@ -6,15 +6,15 @@ on:
       target_platform:
         description: "Target platform label"
         required: true
-        default: "android-x64"
+        default: "windows-x64"
       prune_profile:
         description: "Prune profile under runtime/build/prune-rules"
         required: true
         type: choice
         options:
-          - android-host-slim
+          - windows-host-slim
           - full
-        default: "android-host-slim"
+        default: "windows-host-slim"
       dsh_package:
         description: "pnpm filter package to deploy"
         required: true
@@ -26,9 +26,9 @@ on:
 
 jobs:
   build:
-    name: Build runtime
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
+    name: Build Windows runtime
+    runs-on: windows-latest
+    timeout-minutes: 75
 
     steps:
       - name: Checkout DSH
@@ -40,6 +40,7 @@ jobs:
           node-version: "24"
 
       - name: Enable pnpm
+        shell: pwsh
         run: |
           corepack enable
           corepack prepare pnpm@11.7.0 --activate
@@ -48,17 +49,20 @@ jobs:
 
       - name: Locate pnpm store
         id: pnpm-store
-        run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+        shell: pwsh
+        run: |
+          "path=$(pnpm store path --silent)" >> $env:GITHUB_OUTPUT
 
       - name: Cache pnpm store
         uses: actions/cache@v4
         with:
           path: ${{ steps.pnpm-store.outputs.path }}
-          key: dsh-runtime-pnpm-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'runtime/build/prune-rules/*.env') }}
+          key: dsh-runtime-pnpm-windows-${{ hashFiles('pnpm-lock.yaml', 'runtime/build/prune-rules/*.env') }}
           restore-keys: |
-            dsh-runtime-pnpm-${{ runner.os }}-
+            dsh-runtime-pnpm-windows-
 
-      - name: Build DSH runtime artifact
+      - name: Build Windows DSH runtime artifact
+        shell: bash
         env:
           DSH_REPO: ${{ github.server_url }}/${{ github.repository }}
           DSH_REF: ${{ github.ref_name }}
@@ -67,17 +71,17 @@ jobs:
           DSH_PACKAGE: ${{ inputs.dsh_package }}
           DSH_BUILD_COMMAND: ${{ inputs.build_command }}
           DSH_RUNTIME_FAST_STATS: "true"
-          DSH_RUNTIME_MATERIALIZE_ALL_SYMLINKS: ${{ startsWith(inputs.target_platform, 'android-') && 'true' || '' }}
-          ARTIFACT_DIR: ${{ runner.temp }}/dsh-runtime-artifacts
         run: |
-          bash runtime/build/build-dsh-runtime-artifact.sh --dsh-source-dir "$GITHUB_WORKSPACE"
+          mkdir -p "$PWD/build/dsh-runtime-artifacts"
+          ARTIFACT_DIR="$PWD/build/dsh-runtime-artifacts" \
+            bash runtime/build/build-dsh-runtime-artifact.sh --dsh-source-dir "$GITHUB_WORKSPACE"
 
-      - name: Upload DSH runtime artifact
+      - name: Upload Windows DSH runtime artifact
         uses: actions/upload-artifact@v4
         with:
           name: dsh-runtime-${{ inputs.target_platform }}-${{ inputs.prune_profile }}
           path: |
-            ${{ runner.temp }}/dsh-runtime-artifacts/*.tar.gz
-            ${{ runner.temp }}/dsh-runtime-artifacts/*.tar.gz.sha256
-            ${{ runner.temp }}/dsh-runtime-artifacts/*.manifest.json
+            build/dsh-runtime-artifacts/*.tar.gz
+            build/dsh-runtime-artifacts/*.tar.gz.sha256
+            build/dsh-runtime-artifacts/*.manifest.json
           if-no-files-found: error

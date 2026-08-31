@@ -75,7 +75,7 @@ function fakeResponse(): { response: ServerResponse; state: { status?: number; b
   return { response, state }
 }
 
-async function mounted(config?: { trustedHosts?: string[] }): Promise<{
+async function mounted(config?: { trustedHosts?: string[]; trustedOrigins?: string[] }): Promise<{
   routes: WebRoute[]
   upgrades: WebUpgradeRoute[]
   dispose: () => Promise<void>
@@ -117,6 +117,18 @@ describe('connection node half', () => {
     ctx.provide('apiProxy', {} as unknown as ApiProxy)
     const fiber = ctx.plugin({ inject: [...inject], apply }, { trustedHosts: ['harness.internal/path'] })
     await expect(fiber).rejects.toThrow(/not a bare host\[:port\] authority/)
+    expect(routes).toHaveLength(0)
+    expect(upgrades).toHaveLength(0)
+  })
+
+  it('fails the load on a trustedOrigins entry that is not a canonical HTTP origin', async () => {
+    const routes: WebRoute[] = []
+    const upgrades: WebUpgradeRoute[] = []
+    const ctx = new Context()
+    ctx.provide('webServer', fakeHttpServer(routes, upgrades) as WebServer)
+    ctx.provide('apiProxy', {} as unknown as ApiProxy)
+    const fiber = ctx.plugin({ inject: [...inject], apply }, { trustedOrigins: ['https://localhost/path'] })
+    await expect(fiber).rejects.toThrow(/not a canonical HTTP\(S\) origin/)
     expect(routes).toHaveLength(0)
     expect(upgrades).toHaveLength(0)
   })
@@ -216,6 +228,23 @@ describe('connection node half', () => {
       host: 'harness.example:3080', origin: 'http://harness.example:3080', 'sec-fetch-site': 'same-origin',
     }), declared.response)
     expect(declared.state.status).toBe(404)
+    await dispose()
+  })
+
+  it('accepts a configured native-shell origin on loopback Host requests', async () => {
+    const { routes, dispose } = await mounted({ trustedOrigins: ['https://localhost'] })
+    const allowed = fakeResponse()
+    await routes[0]!.handler(fakeRequest({
+      host: '127.0.0.1:3081', origin: 'https://localhost', 'sec-fetch-site': 'same-site',
+    }), allowed.response)
+    expect(allowed.state.status).toBe(404)
+
+    const denied = fakeResponse()
+    await routes[0]!.handler(fakeRequest({
+      host: '127.0.0.1:3081', origin: 'https://other.localhost', 'sec-fetch-site': 'same-site',
+    }), denied.response)
+    expect(denied.state.status).toBe(403)
+    expect(denied.state.body).toBe('forbidden')
     await dispose()
   })
 

@@ -60,7 +60,7 @@ PNPM_BIN="${PNPM_BIN:-pnpm}"
 PNPM_STORE_DIR="${PNPM_STORE_DIR:-}"
 DSH_BUILD_COMMAND="${DSH_BUILD_COMMAND:-pnpm run build}"
 DSH_BUILD_LOG_MODE="${DSH_BUILD_LOG_MODE:-summary}"
-DSH_RUNTIME_REQUIRED_WORKSPACE_PACKAGES="${DSH_RUNTIME_REQUIRED_WORKSPACE_PACKAGES:-@deepseek-ai/*}"
+DSH_RUNTIME_REQUIRED_WORKSPACE_PACKAGES="${DSH_RUNTIME_REQUIRED_WORKSPACE_PACKAGES:-@deepseek-ai/* @blue-soda/*}"
 SKIP_INSTALL=false
 SKIP_BUILD=false
 OFFLINE=false
@@ -120,6 +120,19 @@ run_pnpm() {
   fi
 }
 
+path_for_node_process() {
+  run_node - "$1" <<'NODE'
+const file = process.argv[2];
+if (process.platform !== 'win32') {
+  process.stdout.write(file);
+  process.exit(0);
+}
+process.stdout.write(file
+  .replace(/^\/mnt\/([a-zA-Z])\//, (_, drive) => `${drive}:/`)
+  .replace(/^\/([a-zA-Z])\//, (_, drive) => `${drive}:/`));
+NODE
+}
+
 find_workspace_package_dir() {
   local package_name="$1"
   run_node - "$SOURCE_DIR" "$package_name" <<'NODE'
@@ -132,7 +145,16 @@ const ignored = new Set(['.git', 'node_modules', '.turbo', '.next', 'dist']);
 
 function toNodePath(file) {
   if (process.platform !== 'win32') return file;
-  return file.replace(/^\/([a-zA-Z])\//, (_, drive) => `${drive}:/`);
+  return file
+    .replace(/^\/mnt\/([a-zA-Z])\//, (_, drive) => `${drive}:/`)
+    .replace(/^\/([a-zA-Z])\//, (_, drive) => `${drive}:/`);
+}
+
+function toBashPath(file) {
+  if (process.platform !== 'win32') return file;
+  return file
+    .replace(/\\/g, '/')
+    .replace(/^([a-zA-Z]):\//, (_, drive) => `/mnt/${drive.toLowerCase()}/`);
 }
 
 function walk(dir) {
@@ -155,7 +177,7 @@ function walk(dir) {
   return '';
 }
 
-process.stdout.write(walk(toNodePath(root)));
+process.stdout.write(toBashPath(walk(toNodePath(root))));
 NODE
 }
 
@@ -177,13 +199,23 @@ const path = require('path');
 const rootArg = process.argv[2];
 const spec = process.argv[3];
 const root = process.platform === 'win32'
-  ? rootArg.replace(/^\/([a-zA-Z])\//, (_, drive) => `${drive}:/`)
+  ? rootArg
+    .replace(/^\/mnt\/([a-zA-Z])\//, (_, drive) => `${drive}:/`)
+    .replace(/^\/([a-zA-Z])\//, (_, drive) => `${drive}:/`)
   : rootArg;
 const ignored = new Set(['.git', 'node_modules', '.turbo', '.next', 'dist']);
 const results = [];
 
+function toBashPath(file) {
+  if (process.platform !== 'win32') return file;
+  return file
+    .replace(/\\/g, '/')
+    .replace(/^([a-zA-Z]):\//, (_, drive) => `/mnt/${drive.toLowerCase()}/`);
+}
+
 function matches(name) {
   if (spec.endsWith('/*')) return name.startsWith(`${spec.slice(0, -1)}`);
+  if (spec.endsWith('*')) return name.startsWith(spec.slice(0, -1));
   const escaped = spec.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replaceAll('\\*', '.*');
   return new RegExp(`^${escaped}$`, 'u').test(name);
 }
@@ -210,7 +242,7 @@ function walk(dir) {
 
 walk(root);
 for (const [name, dir] of results.sort((a, b) => a[0].localeCompare(b[0]))) {
-  console.log(`${name}\t${dir}`);
+  console.log(`${name}\t${toBashPath(dir)}`);
 }
 NODE
 }
@@ -262,7 +294,10 @@ copy_workspace_package_to_runtime_target() {
     cd "$source_package_dir"
     tar \
       --exclude='./.git' \
+      --exclude='./.tmp' \
       --exclude='./node_modules' \
+      --exclude='./build' \
+      --exclude='./coverage' \
       --exclude='./src' \
       --exclude='./test' \
       --exclude='./tests' \
@@ -292,6 +327,9 @@ repair_runtime_workspace_packages() {
     found=0
     while IFS=$'\t' read -r package_name source_package_dir; do
       [[ -n "$package_name" && -n "$source_package_dir" ]] || continue
+      if [[ "$package_name" == "@deepseek-ai/dsh-root" ]]; then
+        continue
+      fi
       found=1
       printf '%s\t%s\n' "$package_name" "$source_package_dir" >> "$packages_file"
 
@@ -299,13 +337,7 @@ repair_runtime_workspace_packages() {
       root_target="$(package_target_dir "$RUNTIME_DIR/node_modules" "$package_name")"
       if [[ ! -e "$root_target" ]]; then
         mkdir -p "$(dirname "$root_target")"
-        deployed_target="$(find_runtime_package_instance "$package_name")"
-        if [[ -n "$deployed_target" ]]; then
-          link_target="$(relative_symlink_target "$deployed_target" "$(dirname "$root_target")")"
-          ln -s "$link_target" "$root_target"
-        else
-          copy_workspace_package_to_runtime_target "$source_package_dir" "$root_target"
-        fi
+        copy_workspace_package_to_runtime_target "$source_package_dir" "$root_target"
         copied=$((copied + 1))
       fi
 
@@ -328,7 +360,9 @@ const path = require('path');
 
 function toNodePath(file) {
   if (process.platform !== 'win32') return file;
-  return file.replace(/^\/([a-zA-Z])\//, (_, drive) => `${drive}:/`);
+  return file
+    .replace(/^\/mnt\/([a-zA-Z])\//, (_, drive) => `${drive}:/`)
+    .replace(/^\/([a-zA-Z])\//, (_, drive) => `${drive}:/`);
 }
 
 const runtimeDir = fs.realpathSync(toNodePath(process.argv[2]));
@@ -385,6 +419,7 @@ function linkWorkspacePackage(contextDir, packageName) {
     fs.lstatSync(target);
     return false;
   } catch (error) {
+    if (error?.code === 'EACCES') return false;
     if (error?.code !== 'ENOENT') throw error;
   }
 
@@ -396,6 +431,11 @@ function linkWorkspacePackage(contextDir, packageName) {
 
   const linkDir = path.dirname(target);
   fs.mkdirSync(linkDir, { recursive: true });
+  if (process.platform === 'win32') {
+    fs.cpSync(rootTarget, target, { recursive: true, dereference: true });
+    created += 1;
+    return true;
+  }
   fs.symlinkSync(relativeLinkTarget(rootTarget, linkDir), target);
   created += 1;
   return true;
@@ -492,28 +532,41 @@ NODE
 materialize_external_runtime_symlinks() {
   [[ -d "$RUNTIME_DIR/node_modules" ]] || return 0
 
-  run_node - "$RUNTIME_DIR" <<'NODE'
+  local materialize_all_symlinks="${DSH_RUNTIME_MATERIALIZE_ALL_SYMLINKS:-}"
+  if [[ ( "$TARGET_PLATFORM" == windows-* || "$TARGET_PLATFORM" == android-* ) && -z "$materialize_all_symlinks" ]]; then
+    materialize_all_symlinks=true
+  fi
+
+  run_node - "$RUNTIME_DIR" "$TARGET_PLATFORM" "$materialize_all_symlinks" <<'NODE'
 const fs = require('fs');
 const path = require('path');
 
 const rootArg = process.argv[2];
+const targetPlatform = process.argv[3] || '';
+const materializeAllSymlinksArg = process.argv[4] || '';
+const materializeAllSymlinks = materializeAllSymlinksArg === 'true' || (targetPlatform.startsWith('windows-') && materializeAllSymlinksArg !== 'false');
 const root = fs.realpathSync(process.platform === 'win32'
-  ? rootArg.replace(/^\/([a-zA-Z])\//, (_, drive) => `${drive}:/`)
+  ? rootArg
+    .replace(/^\/mnt\/([a-zA-Z])\//, (_, drive) => `${drive}:/`)
+    .replace(/^\/([a-zA-Z])\//, (_, drive) => `${drive}:/`)
   : rootArg);
 const nodeModules = path.join(root, 'node_modules');
-const skipNames = new Set([
+const walkSkipNames = new Set([
   '.git',
-  'node_modules',
   'src',
   'test',
   'tests',
   '__tests__',
-  'docs',
-  'doc',
   'examples',
   'example',
   'fixtures',
 ]);
+if (!materializeAllSymlinks) {
+  walkSkipNames.add('node_modules');
+}
+const copySkipNames = new Set(walkSkipNames);
+copySkipNames.add('node_modules');
+copySkipNames.delete('src');
 const links = [];
 const brokenLinks = [];
 
@@ -523,8 +576,15 @@ function isInsideRoot(file) {
 
 function walk(dir) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (walkSkipNames.has(entry.name)) continue;
     const file = path.join(dir, entry.name);
-    const stat = fs.lstatSync(file);
+    let stat;
+    try {
+      stat = fs.lstatSync(file);
+    } catch (error) {
+      brokenLinks.push({ link: file, target: '', error: error.message });
+      continue;
+    }
     if (stat.isSymbolicLink()) {
       const rawTarget = fs.readlinkSync(file);
       let target;
@@ -534,7 +594,7 @@ function walk(dir) {
         brokenLinks.push({ link: file, target: rawTarget, error: error.message });
         continue;
       }
-      if (path.isAbsolute(rawTarget) || !isInsideRoot(target)) {
+      if (materializeAllSymlinks || path.isAbsolute(rawTarget) || !isInsideRoot(target)) {
         links.push({ link: file, target });
       }
       continue;
@@ -545,17 +605,24 @@ function walk(dir) {
   }
 }
 
-function copyRecursive(source, destination) {
+function copyRecursive(source, destination, seenDirectories = new Set()) {
   const stat = fs.lstatSync(source);
   if (stat.isSymbolicLink()) {
-    copyRecursive(fs.realpathSync(source), destination);
+    copyRecursive(fs.realpathSync(source), destination, seenDirectories);
     return;
   }
   if (stat.isDirectory()) {
+    const realSource = fs.realpathSync(source);
+    if (seenDirectories.has(realSource)) {
+      fs.mkdirSync(destination, { recursive: true });
+      return;
+    }
+    const nextSeenDirectories = new Set(seenDirectories);
+    nextSeenDirectories.add(realSource);
     fs.mkdirSync(destination, { recursive: true });
     for (const entry of fs.readdirSync(source, { withFileTypes: true })) {
-      if (skipNames.has(entry.name)) continue;
-      copyRecursive(path.join(source, entry.name), path.join(destination, entry.name));
+      if (copySkipNames.has(entry.name)) continue;
+      copyRecursive(path.join(source, entry.name), path.join(destination, entry.name), nextSeenDirectories);
     }
     return;
   }
@@ -580,7 +647,68 @@ for (const { link, target } of links) {
   fs.renameSync(temp, link);
 }
 
+let hoistedVirtualStorePackages = 0;
+const pnpmNodeModules = path.join(nodeModules, '.pnpm', 'node_modules');
+function hoistPackage(source, destination) {
+  if (fs.existsSync(destination)) {
+    if (process.env.DSH_RUNTIME_FORCE_HOIST_PACKAGES === 'true') {
+      fs.rmSync(destination, { recursive: true, force: true });
+    } else {
+      return;
+    }
+  }
+  const temp = `${destination}.hoisted-${process.pid}`;
+  fs.rmSync(temp, { recursive: true, force: true });
+  copyRecursive(source, temp);
+  fs.renameSync(temp, destination);
+  hoistedVirtualStorePackages += 1;
+}
+if (materializeAllSymlinks && fs.existsSync(pnpmNodeModules)) {
+  for (const entry of fs.readdirSync(pnpmNodeModules, { withFileTypes: true })) {
+    if (walkSkipNames.has(entry.name)) continue;
+    const source = path.join(pnpmNodeModules, entry.name);
+    if (entry.isDirectory() && entry.name.startsWith('@')) {
+      for (const scopedEntry of fs.readdirSync(source, { withFileTypes: true })) {
+        if (!scopedEntry.isDirectory() || walkSkipNames.has(scopedEntry.name)) continue;
+        const scopeDestination = path.join(nodeModules, entry.name);
+        fs.mkdirSync(scopeDestination, { recursive: true });
+        hoistPackage(path.join(source, scopedEntry.name), path.join(scopeDestination, scopedEntry.name));
+      }
+      continue;
+    }
+    if (entry.isDirectory()) {
+      hoistPackage(source, path.join(nodeModules, entry.name));
+    }
+  }
+}
+const pnpmStore = path.join(nodeModules, '.pnpm');
+if (materializeAllSymlinks && fs.existsSync(pnpmStore)) {
+  for (const storeEntry of fs.readdirSync(pnpmStore, { withFileTypes: true })) {
+    if (!storeEntry.isDirectory() || storeEntry.name === 'node_modules') continue;
+    const packageNodeModules = path.join(pnpmStore, storeEntry.name, 'node_modules');
+    if (!fs.existsSync(packageNodeModules)) continue;
+    for (const entry of fs.readdirSync(packageNodeModules, { withFileTypes: true })) {
+      if (walkSkipNames.has(entry.name)) continue;
+      const source = path.join(packageNodeModules, entry.name);
+      if (entry.isDirectory() && entry.name.startsWith('@')) {
+        for (const scopedEntry of fs.readdirSync(source, { withFileTypes: true })) {
+          if (!scopedEntry.isDirectory() || walkSkipNames.has(scopedEntry.name)) continue;
+          const scopeDestination = path.join(nodeModules, entry.name);
+          fs.mkdirSync(scopeDestination, { recursive: true });
+          hoistPackage(path.join(source, scopedEntry.name), path.join(scopeDestination, scopedEntry.name));
+        }
+        continue;
+      }
+      if (entry.isDirectory()) {
+        hoistPackage(source, path.join(nodeModules, entry.name));
+      }
+    }
+  }
+}
+
 console.log(`materialized_external_symlinks=${links.length}`);
+console.log(`materialized_all_runtime_symlinks=${materializeAllSymlinks}`);
+console.log(`hoisted_virtual_store_packages=${hoistedVirtualStorePackages}`);
 console.log(`removed_broken_runtime_symlinks=${brokenLinks.length}`);
 NODE
 }
@@ -588,7 +716,9 @@ NODE
 check_dsh_version() {
   local stage="$1"
   local version_file="/tmp/dsh-runtime-version.$$"
-  if ! "$NODE_BIN" "$RUNTIME_DIR/lib/bin.js" --version >"$version_file"; then
+  local entrypoint
+  entrypoint="$(path_for_node_process "$RUNTIME_DIR/lib/bin.js")"
+  if ! "$NODE_BIN" "$entrypoint" --version >"$version_file"; then
     echo "DSH runtime version check failed at stage: $stage" >&2
     echo "Known cordis-plugin-group paths:" >&2
     find "$RUNTIME_DIR" -maxdepth 10 -path '*cordis-plugin-group*' -print | head -80 >&2 || true
@@ -618,7 +748,9 @@ if [[ -n "$SOURCE_DIR" ]]; then
   PACKAGE_MANAGER="$(run_node - "$SOURCE_DIR/package.json" <<'NODE'
 const file = process.argv[2];
 const nodePath = process.platform === 'win32'
-  ? file.replace(/^\/([a-zA-Z])\//, (_, drive) => `${drive}:/`)
+  ? file
+    .replace(/^\/mnt\/([a-zA-Z])\//, (_, drive) => `${drive}:/`)
+    .replace(/^\/([a-zA-Z])\//, (_, drive) => `${drive}:/`)
   : file;
 const p = require(nodePath);
 console.log(p.packageManager || '');
@@ -674,7 +806,7 @@ fi
 if [[ -z "$PREBUILT_RUNTIME_DIR" ]]; then
   (
     cd "$SOURCE_DIR"
-    run_pnpm --filter "$DSH_PACKAGE" deploy --legacy --prod "$RUNTIME_DIR"
+    run_pnpm --filter "$DSH_PACKAGE" deploy --legacy --prod "$(path_for_node_process "$RUNTIME_DIR")"
   )
 fi
 
@@ -698,11 +830,16 @@ check_dsh_version "after pruning" || exit 4
 
 # Android app sandboxes may reject restoring hardlinks from tar archives. Expand
 # hardlinks into regular files so the artifact can be extracted with toybox tar.
-tar --hard-dereference -czf "$TAR_PATH" -C "$RUNTIME_DIR" .
+tar --hard-dereference -I "gzip -1" -cf "$TAR_PATH" -C "$RUNTIME_DIR" .
 sha256sum "$TAR_PATH" > "$SHA_PATH"
 
-RUNTIME_BYTES="$(du -sb "$RUNTIME_DIR" | awk '{print $1}')"
-NODE_MODULES_BYTES="$(du -sb "$RUNTIME_DIR/node_modules" | awk '{print $1}')"
+if [[ "${DSH_RUNTIME_FAST_STATS:-false}" == "true" ]]; then
+  RUNTIME_BYTES=0
+  NODE_MODULES_BYTES=0
+else
+  RUNTIME_BYTES="$(du -sb "$RUNTIME_DIR" | awk '{print $1}')"
+  NODE_MODULES_BYTES="$(du -sb "$RUNTIME_DIR/node_modules" | awk '{print $1}')"
+fi
 TAR_BYTES="$(stat -c '%s' "$TAR_PATH")"
 SHA256="$(awk '{print $1}' "$SHA_PATH")"
 
