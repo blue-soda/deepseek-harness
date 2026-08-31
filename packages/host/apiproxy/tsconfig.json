@@ -93,6 +93,9 @@
       "path": "../directory-picker"
     },
     {
+      "path": "../banyan-file-ops"
+    },
+    {
       "path": "../../extensions/cordis-host-runner"
     },
     {
