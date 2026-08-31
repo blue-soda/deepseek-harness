@@ -76,6 +76,7 @@ interface BenchOptions {
   workspacePickerOpen?: boolean
   onRequestWorkspace?: () => void
   promptError?: ConversationSnapshot['promptError']
+  lastAgentError?: string | null
   /** Authoritative queue rows served to the machine overlay (empty = none). */
   queue?: ConversationSnapshot['queue']
   /** The hub's steer-all face (empty-draft accelerated Enter). */
@@ -117,6 +118,7 @@ function bench(over?: BenchOptions) {
     subagent: over?.subagent ?? null,
     removed: over?.disabled ?? false,
     promptError: over?.promptError ?? null,
+    lastAgentError: over?.lastAgentError ?? null,
     queue: over?.queue ?? [],
   }))
   type ShellDeps = ConstructorParameters<typeof SessionInputShell>[0]
@@ -1438,6 +1440,18 @@ describe('strips and variants', () => {
       expect(view.queryByRole('status')).toBeNull()
       act(() => { vi.advanceTimersByTime(4000) })
       expect(view.queryByRole('alert')).toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('announces the latest host Agent failure as a fading toast', () => {
+    vi.useFakeTimers()
+    try {
+      const send = bench({ lastAgentError: '模型请求失败：缺少 API key' })
+      expect(send.view.getByRole('alert').textContent).toContain('模型请求失败：缺少 API key')
+      act(() => { vi.advanceTimersByTime(4000) })
+      expect(send.view.queryByRole('alert')).toBeNull()
     } finally {
       vi.useRealTimers()
     }

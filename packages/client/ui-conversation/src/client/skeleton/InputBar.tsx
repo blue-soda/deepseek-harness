@@ -89,6 +89,7 @@ export function InputBar({
   const lexicon = useLexicon(s => s)
   const commandMenuOpen = useMenuLauncher(source => source === 'command')
   const promptError = useSession(s => s.promptError) ?? null
+  const lastAgentError = useSession(s => s.lastAgentError) ?? null
   const running = useSession(s => s.running) ?? false
   const subagent = useSession(s => s.subagent) ?? null
   const removed = useSession(s => s.removed) ?? false
@@ -132,6 +133,10 @@ export function InputBar({
       ? attachmentErrorText(t, promptError.error.details.reason, imageLimits)
       : `${promptError.error.message} (${promptError.error.code})`)
   }, [promptError, showToast, t, imageLimits])
+  useEffect(() => {
+    if (lastAgentError === null) return
+    showToast(lastAgentError)
+  }, [lastAgentError, showToast])
   useEffect(() => {
     if (notice?.level === 'error') showToast(notice.text)
   }, [notice, showToast])

@@ -112,6 +112,31 @@ function isENOENT(error: unknown): boolean {
   return (error as NodeJS.ErrnoException | null)?.code === 'ENOENT'
 }
 
+function isAndroidRuntime(): boolean {
+  const appHome = process.env['HOME'] ?? process.env['DSH_HOME'] ?? process.cwd()
+  return process.platform === 'linux' && (
+    process.env['ANDROID_ROOT'] !== undefined
+    || process.env['ANDROID_DATA'] !== undefined
+    || process.env['BANYAN_ANDROID_RUNTIME'] === '1'
+    || process.env['PREFIX']?.includes('/com.termux/') === true
+    || appHome.includes('/data/user/0/com.bluesoda.banyan/')
+    || appHome.includes('/data/data/com.bluesoda.banyan/')
+  )
+}
+
+function isUnsupportedLinkError(error: unknown): boolean {
+  const code = (error as NodeJS.ErrnoException | null)?.code
+  const message = error instanceof Error
+    ? error.message
+    : typeof error === 'object' && error !== null && 'message' in error
+      ? String((error as { message?: unknown }).message)
+      : String(error)
+  return code === 'EACCES'
+    || code === 'EPERM'
+    || code === 'ENOTSUP'
+    || /\b(?:EACCES|EPERM|ENOTSUP)\b|permission denied/iu.test(message)
+}
+
 /**
  * The JSONL persistence backend. Load as a plugin; it registers as
  * `ctx.sessionPersistence` and (via the coordinator) installs the write-path
@@ -546,7 +571,16 @@ export class JsonlSessionPersistence extends SessionPersistence implements Persi
     // concurrently cannot clobber each other. rename() would silently overwrite.
     let linked = false
     try {
-      await link(tmp, finalPath)
+      if (isAndroidRuntime()) {
+        await this.publishNewFileWithoutHardLink(tmp, finalPath)
+      } else {
+        try {
+          await link(tmp, finalPath)
+        } catch (error) {
+          if (!isUnsupportedLinkError(error)) throw error
+          await this.publishNewFileWithoutHardLink(tmp, finalPath)
+        }
+      }
       linked = true
     } finally {
       // Remove an unpublished temp on failure. After publication, defer cleanup
@@ -561,13 +595,26 @@ export class JsonlSessionPersistence extends SessionPersistence implements Persi
     // Best-effort temp cleanup: the log is already published and durable, so a
     // failure to remove the (now-redundant) temp hard link must NOT reject the
     // append. Swallow only the rm failure; nothing else of consequence runs here.
-    try {
-      await rm(tmp, { force: true })
-    } catch {
-      /* v8 ignore next -- redundant temp link; publish already durable, rm failure is an unreachable IO edge */
+    if (await this.exists(tmp)) {
+      try {
+        await rm(tmp, { force: true })
+      } catch {
+        /* v8 ignore next -- redundant temp link; publish already durable, rm failure is an unreachable IO edge */
+      }
     }
   }
   /* v8 ignore stop */
+
+  private async publishNewFileWithoutHardLink(tmp: string, finalPath: string): Promise<void> {
+    const content = await readFile(tmp)
+    const handle = await open(finalPath, 'wx', 0o600)
+    try {
+      await handle.writeFile(content)
+      await handle.sync()
+    } finally {
+      await handle.close()
+    }
+  }
 
   /* v8 ignore start -- native Windows coverage exercises this integration path */
   private async materializeWin32(
