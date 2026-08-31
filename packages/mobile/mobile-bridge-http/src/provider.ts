@@ -13,7 +13,7 @@ import type {
 } from '@deepseek-ai/dsh-mobile'
 import { MobileError } from '@deepseek-ai/dsh-mobile'
 
-/** Default Android bridge URL exposed by DeepDroidPilot. */
+/** Default Android bridge URL exposed by Banyan. */
 export const DEFAULT_ANDROID_BRIDGE_URL = 'http://127.0.0.1:8765'
 
 /** Stable provider id for the local Android bridge HTTP transport. */
