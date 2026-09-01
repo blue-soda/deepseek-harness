@@ -1326,6 +1326,9 @@ importers:
 
   packages/bundle/web-app:
     dependencies:
+      '@blue-soda/dsh-banyan-ui-authoring':
+        specifier: workspace:^
+        version: link:../../extensions/banyan-ui-authoring
       '@blue-soda/dsh-host-banyan-file-ops':
         specifier: workspace:^
         version: link:../../host/banyan-file-ops
@@ -4259,6 +4262,18 @@ importers:
       '@deepseek-ai/dsh-tools':
         specifier: workspace:^
         version: link:../../core/tools
+
+  packages/extensions/banyan-ui-authoring:
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-invariants':
+        specifier: workspace:^
+        version: link:../../runtime-diagnostics/invariants
+      '@deepseek-ai/dsh-system-prompt':
+        specifier: workspace:^
+        version: link:../../core/system-prompt
 
   packages/extensions/cordis-client-runner:
     devDependencies:

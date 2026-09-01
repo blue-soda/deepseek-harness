@@ -104,6 +104,11 @@
     - id: banyan-file-ops
       name: '@blue-soda/dsh-host-banyan-file-ops'
 
+    # Banyan Agent UI authoring prompt: tells Agents how to use Cordis dynamic
+    # Client plugins with Banyan's persistent Settings-visible plugin bridge.
+    - id: banyan-ui-authoring
+      name: '@blue-soda/dsh-banyan-ui-authoring'
+
     # The API gateway: the transport-agnostic dispatch face every client shape
     # shares. The base layer's agent-default-model service owns the default model.
     - id: api-gateway
