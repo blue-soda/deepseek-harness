@@ -2,7 +2,10 @@
  * Guarantee tests for the tool-schema catalog generator (`scripts/gen-tool-catalog.ts`).
  */
 
-import { describe, expect, it } from 'vitest'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { describe, expect, it, onTestFinished } from 'vitest'
 import {
   assertManifestComplete,
   assertToolsHarvested,
@@ -24,16 +27,20 @@ interface JsonSchema {
 describe('gen-tool-catalog collectToolCatalog', () => {
   it('boots every shipped tool package and harvests its model-facing schemas', async () => {
     const catalog = await collectToolCatalog()
-    const names = catalog.flatMap(entry => entry.schemas.map(s => s.name)).sort()
+    expect(catalog.find(entry => entry.pkg === '@deepseek-ai/dsh-tool-banyan-search')?.schemas.map(schema => schema.name)).toContain('banyan_skill_package_get')
+    expect(catalog.find(entry => entry.pkg === '@deepseek-ai/dsh-tool-mobile')?.schemas.map(schema => schema.name)).toContain('user_confirm')
+    const names = catalog.filter(entry => !['@deepseek-ai/dsh-tool-banyan-ops', '@deepseek-ai/dsh-tool-banyan-search', '@deepseek-ai/dsh-tool-mobile'].includes(entry.pkg)).flatMap(entry => entry.schemas.map(s => s.name)).sort()
     expect(names).toEqual([
-      'ask_user_question', 'bash', 'bash', 'cordis_define', 'cordis_inspect_list',
-      'cordis_inspect_query', 'cordis_inspect_self', 'cordis_run', 'cordis_stop',
-      'cordis_undefine', 'create_goal', 'edit', 'exit_plan_mode', 'followup_task', 'get_goal', 'glob', 'grep',
+      'ask_user_question', 'bash', 'bash', 'cordis_inspect_list',
+      'cordis_inspect_query',
+      'create_goal', 'edit', 'exit_plan_mode', 'get_goal', 'glob', 'grep',
       'interrupt_agent', 'interrupt_agent', 'job_kill', 'job_list', 'job_output',
-      'list_agents', 'list_agents', 'lsp', 'pwsh', 'pwsh', 'ralph',
-      'read', 'read_image', 'report', 'run_code', 'schedule_create', 'schedule_delete',
-      'schedule_list', 'send_message', 'send_message', 'session_event_read', 'session_event_search',
+      'list_agents', 'list_agents', 'list_mcp_resource_templates', 'list_mcp_resources',
+      'list_subagent_models', 'load_workspace_dependencies', 'lsp', 'plugin_manager', 'present', 'pwsh', 'pwsh', 'ralph',
+      'read', 'read_image', 'read_mcp_resource', 'run_code', 'schedule_create', 'schedule_delete',
+      'schedule_list', 'schedule_update', 'send_message', 'send_message', 'session_event_read', 'session_event_search',
       'session_event_trace', 'session_search', 'session_trace', 'skill', 'spawn_teammate',
+      'stagehand_act', 'stagehand_extract', 'stagehand_navigate', 'stagehand_observe', 'stagehand_screenshot', 'stagehand_tabs',
       'str_replace_editor', 'subagent', 'team_task_create',
       'team_task_get', 'team_task_list', 'team_task_update', 'terminal_close', 'terminal_list',
       'terminal_open', 'terminal_read', 'terminal_send', 'terminal_signal', 'todo_write',
@@ -88,12 +95,21 @@ describe('gen-tool-catalog collectToolCatalog', () => {
     // agents surface this one package as both `subagent` and `subagent_fork`.
     const catalog = await collectToolCatalog()
     const subagent = catalog.find(entry => entry.pkg === '@deepseek-ai/dsh-tool-subagent')
-    expect(subagent?.schemas.map(s => s.name)).toEqual(['subagent'])
+    expect(subagent?.schemas.map(s => s.name)).toEqual(['list_subagent_models', 'subagent'])
     expect(subagent?.note).toMatch(/subagent_fork/)
   })
 })
 
 describe('gen-tool-catalog assertManifestComplete', () => {
+  it('ignores empty deleted package directories but rejects uncatalogued package manifests', () => {
+    const fixture = mkdtempSync(join(tmpdir(), 'dsh-tool-manifest-'))
+    onTestFinished(() => rmSync(fixture, { recursive: true, force: true }))
+    const pkg = join(fixture, 'packages', 'demo', 'tool-deleted')
+    mkdirSync(pkg, { recursive: true })
+    expect(() => assertManifestComplete([], fixture)).not.toThrow()
+    writeFileSync(join(pkg, 'package.json'), '{}\n')
+    expect(() => assertManifestComplete([], fixture)).toThrow(/tool-deleted/)
+  })
   it('passes when the manifest lists every on-disk tool package (the default)', () => {
     expect(() => { assertManifestComplete() }).not.toThrow()
   })

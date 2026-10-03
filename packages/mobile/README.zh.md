@@ -1,8 +1,19 @@
+---
+description: "Android 桥接能力与工具包导航。"
+kind: package-group
+---
+
 # mobile/ - Android 移动端能力族
 
 [English](README.md) | 中文
 
+## 概述
+
 这个能力族提供与具体传输无关的 Android bridge 执行接口，以及消费该接口的模型可见工具。
+
+## 目录
+
+- [Banyan subsystem](../../docs/subsystems/banyan.zh.md)
 
 | 包 | 职责 | ctx key |
 |---|---|---|

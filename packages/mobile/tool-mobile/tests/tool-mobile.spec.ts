@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { CallId } from '@deepseek-ai/dsh-llm'
+import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import MobileRuntime from '@deepseek-ai/dsh-mobile'
 import type { AndroidBridgeHealth, AndroidBridgeProvider, AndroidToolRequest, AndroidToolResponse } from '@deepseek-ai/dsh-mobile'
@@ -202,12 +202,12 @@ describe('dsh-tool-mobile', () => {
     const { ctx, provider } = await setup()
     const result = await ctx.tools.execute({
       signal: signal(),
-      callId: CallId('tap-1'),
+      callId: ToolCallId('tap-1'),
       name: 'input_tap',
       arguments: { nodePath: '0/1', strategy: 'accessibility_then_center', observeAfter: true },
     })
 
-    expect(result.isError).toBe(false)
+    expect(result.isError, JSON.stringify(result)).toBe(false)
     if (result.isError) throw new Error('expected input_tap success')
     expect(provider.requests).toEqual([{
       id: 'tap-1',
@@ -227,12 +227,12 @@ describe('dsh-tool-mobile', () => {
     const { ctx, provider } = await setup()
     const result = await ctx.tools.execute({
       signal: signal(),
-      callId: CallId('observe-full-tree'),
+      callId: ToolCallId('observe-full-tree'),
       name: 'screen_observe',
       arguments: { includeFullTree: true },
     })
 
-    expect(result.isError).toBe(false)
+    expect(result.isError, JSON.stringify(result)).toBe(false)
     expect(provider.requests).toEqual([{
       id: 'observe-full-tree',
       tool: 'screen.observe',
@@ -245,12 +245,12 @@ describe('dsh-tool-mobile', () => {
     const { ctx, provider } = await setup()
     const result = await ctx.tools.execute({
       signal: signal(),
-      callId: CallId('observe-summary'),
+      callId: ToolCallId('observe-summary'),
       name: 'screen_observe',
       arguments: { summary: true },
     })
 
-    expect(result.isError).toBe(false)
+    expect(result.isError, JSON.stringify(result)).toBe(false)
     expect(provider.requests).toEqual([{
       id: 'observe-summary',
       tool: 'screen.observe',
@@ -263,12 +263,12 @@ describe('dsh-tool-mobile', () => {
     const { ctx, provider } = await setup()
     const result = await ctx.tools.execute({
       signal: signal(),
-      callId: CallId('list-apps-1'),
+      callId: ToolCallId('list-apps-1'),
       name: 'app_list_installed',
       arguments: { query: 'chrome', limit: 5 },
     })
 
-    expect(result.isError).toBe(false)
+    expect(result.isError, JSON.stringify(result)).toBe(false)
     expect(provider.requests).toEqual([{
       id: 'list-apps-1',
       tool: 'app.list_installed',
@@ -281,12 +281,12 @@ describe('dsh-tool-mobile', () => {
     const { ctx, provider } = await setup()
     const result = await ctx.tools.execute({
       signal: signal(),
-      callId: CallId('open-url-1'),
+      callId: ToolCallId('open-url-1'),
       name: 'app_open_url',
       arguments: { url: 'https://www.google.com/search?q=Deepseek', packageName: 'com.android.chrome', screenshotAfter: true },
     })
 
-    expect(result.isError).toBe(false)
+    expect(result.isError, JSON.stringify(result)).toBe(false)
     expect(provider.requests).toEqual([{
       id: 'open-url-1',
       tool: 'app.open_url',
@@ -304,19 +304,19 @@ describe('dsh-tool-mobile', () => {
     const agent = fakeAgent(ctx, 'mobile-agent-success')
     const result = await ctx.tools.execute({
       signal: signal(),
-      callId: CallId('tap-session'),
+      callId: ToolCallId('tap-session'),
       name: 'input_tap',
       arguments: { nodePath: '0/1' },
       agent,
     })
 
-    expect(result.isError).toBe(false)
-    expect(agent.session.events.map(event => event.type)).toEqual([
+    expect(result.isError, JSON.stringify(result)).toBe(false)
+    expect(agent.session.snapshotEvents().filter(event => event.type.startsWith('mobile/')).map(event => event.type)).toEqual([
       'mobile/bridge-connected',
       'mobile/tool-request',
       'mobile/tool-result',
     ])
-    expect(agent.session.events[0]).toMatchObject({
+    expect(agent.session.snapshotEvents().filter(event => event.type.startsWith('mobile/'))[0]).toMatchObject({
       type: 'mobile/bridge-connected',
       data: {
         callId: 'tap-session',
@@ -327,7 +327,7 @@ describe('dsh-tool-mobile', () => {
         toolCount: 1,
       },
     })
-    expect(agent.session.events[1]).toMatchObject({
+    expect(agent.session.snapshotEvents().filter(event => event.type.startsWith('mobile/'))[1]).toMatchObject({
       type: 'mobile/tool-request',
       data: {
         callId: 'tap-session',
@@ -338,7 +338,7 @@ describe('dsh-tool-mobile', () => {
         bridgeSessionId: 'mobile-agent-success',
       },
     })
-    expect(agent.session.events[2]).toMatchObject({
+    expect(agent.session.snapshotEvents().filter(event => event.type.startsWith('mobile/'))[2]).toMatchObject({
       type: 'mobile/tool-result',
       data: {
         callId: 'tap-session',
@@ -356,7 +356,7 @@ describe('dsh-tool-mobile', () => {
     const agent = fakeAgent(ctx, 'mobile-memory-agent')
     const result = await ctx.tools.execute({
       signal: signal(),
-      callId: CallId('memory-write-1'),
+      callId: ToolCallId('memory-write-1'),
       name: 'memory_write',
       arguments: {
         text: 'Prefer short summaries',
@@ -367,7 +367,7 @@ describe('dsh-tool-mobile', () => {
       agent,
     })
 
-    expect(result.isError).toBe(false)
+    expect(result.isError, JSON.stringify(result)).toBe(false)
     expect(provider.requests).toContainEqual({
       id: 'memory-write-1',
       tool: 'memory.write',
@@ -380,14 +380,14 @@ describe('dsh-tool-mobile', () => {
       },
       sessionId: 'mobile-memory-agent',
     })
-    expect(agent.session.events[0]).toMatchObject({
+    expect(agent.session.snapshotEvents().filter(event => event.type.startsWith('mobile/'))[0]).toMatchObject({
       type: 'mobile/bridge-connected',
       data: {
         callId: 'memory-write-1',
         tool: 'memory.write',
       },
     })
-    expect(agent.session.events[1]).toMatchObject({
+    expect(agent.session.snapshotEvents().filter(event => event.type.startsWith('mobile/'))[1]).toMatchObject({
       type: 'mobile/tool-request',
       data: {
         callId: 'memory-write-1',
@@ -395,7 +395,7 @@ describe('dsh-tool-mobile', () => {
         risk: 'reversible',
       },
     })
-    expect(agent.session.events[2]).toMatchObject({
+    expect(agent.session.snapshotEvents().filter(event => event.type.startsWith('mobile/'))[2]).toMatchObject({
       type: 'mobile/tool-result',
       data: {
         callId: 'memory-write-1',
@@ -411,19 +411,19 @@ describe('dsh-tool-mobile', () => {
     const agent = fakeAgent(ctx, 'mobile-agent-failed')
     const result = await ctx.tools.execute({
       signal: signal(),
-      callId: CallId('tap-failed'),
+      callId: ToolCallId('tap-failed'),
       name: 'input_tap',
       arguments: { nodePath: '0/1' },
       agent,
     })
 
     expect(result.isError).toBe(true)
-    expect(agent.session.events.map(event => event.type)).toEqual([
+    expect(agent.session.snapshotEvents().filter(event => event.type.startsWith('mobile/')).map(event => event.type)).toEqual([
       'mobile/bridge-connected',
       'mobile/tool-request',
       'mobile/tool-result',
     ])
-    expect(agent.session.events[2]).toMatchObject({
+    expect(agent.session.snapshotEvents().filter(event => event.type.startsWith('mobile/'))[2]).toMatchObject({
       type: 'mobile/tool-result',
       data: {
         callId: 'tap-failed',
@@ -442,14 +442,14 @@ describe('dsh-tool-mobile', () => {
     const agent = fakeAgent(ctx, 'mobile-agent-health-failed')
     const result = await ctx.tools.execute({
       signal: signal(),
-      callId: CallId('tap-health-failed'),
+      callId: ToolCallId('tap-health-failed'),
       name: 'input_tap',
       arguments: { nodePath: '0/1' },
       agent,
     })
 
-    expect(result.isError).toBe(false)
-    expect(agent.session.events[0]).toMatchObject({
+    expect(result.isError, JSON.stringify(result)).toBe(false)
+    expect(agent.session.snapshotEvents().filter(event => event.type.startsWith('mobile/'))[0]).toMatchObject({
       type: 'mobile/bridge-disconnected',
       data: {
         callId: 'tap-health-failed',
@@ -458,7 +458,7 @@ describe('dsh-tool-mobile', () => {
         error: { code: 'MOBILE_BRIDGE_HEALTH_FAILED', message: 'health offline' },
       },
     })
-    expect(agent.session.events.map(event => event.type)).toEqual([
+    expect(agent.session.snapshotEvents().filter(event => event.type.startsWith('mobile/')).map(event => event.type)).toEqual([
       'mobile/bridge-disconnected',
       'mobile/tool-request',
       'mobile/tool-result',
@@ -470,21 +470,21 @@ describe('dsh-tool-mobile', () => {
     const agent = fakeAgent(ctx, 'mobile-approval-agent')
     const result = await ctx.tools.execute({
       signal: signal(),
-      callId: CallId('approval-1'),
+      callId: ToolCallId('approval-1'),
       name: 'user_confirm',
       arguments: { title: 'Send?', detail: 'Approve sending a draft', timeoutMs: 1_000 },
       agent,
     })
 
-    expect(result.isError).toBe(false)
-    expect(agent.session.events.map(event => event.type)).toEqual([
+    expect(result.isError, JSON.stringify(result)).toBe(false)
+    expect(agent.session.snapshotEvents().filter(event => event.type.startsWith('mobile/')).map(event => event.type)).toEqual([
       'mobile/bridge-connected',
       'mobile/approval-requested',
       'mobile/tool-request',
       'mobile/tool-result',
       'mobile/approval-decided',
     ])
-    expect(agent.session.events[1]).toMatchObject({
+    expect(agent.session.snapshotEvents().filter(event => event.type.startsWith('mobile/'))[1]).toMatchObject({
       type: 'mobile/approval-requested',
       data: {
         callId: 'approval-1',
@@ -494,7 +494,7 @@ describe('dsh-tool-mobile', () => {
         timeoutMs: 1_000,
       },
     })
-    expect(agent.session.events[4]).toMatchObject({
+    expect(agent.session.snapshotEvents().filter(event => event.type.startsWith('mobile/'))[4]).toMatchObject({
       type: 'mobile/approval-decided',
       data: {
         callId: 'approval-1',
@@ -510,14 +510,14 @@ describe('dsh-tool-mobile', () => {
     const agent = fakeAgent(ctx, 'mobile-keyless-transcript')
     const result = await ctx.tools.execute({
       signal: signal(),
-      callId: CallId('observe-snapshot'),
+      callId: ToolCallId('observe-snapshot'),
       name: 'screen_observe',
       arguments: {},
       agent,
     })
 
-    expect(result.isError).toBe(false)
-    expect(agent.session.events.map(event => ({
+    expect(result.isError, JSON.stringify(result)).toBe(false)
+    expect(agent.session.snapshotEvents().filter(event => event.type.startsWith('mobile/')).map(event => ({
       type: event.type,
       data: event.data,
     }))).toMatchInlineSnapshot(`
@@ -563,7 +563,7 @@ describe('dsh-tool-mobile', () => {
     const { ctx, provider } = await setup()
     const result = await ctx.tools.execute({
       signal: signal(),
-      callId: CallId('tap-bad'),
+      callId: ToolCallId('tap-bad'),
       name: 'input_tap',
       arguments: { x: 1 },
     })

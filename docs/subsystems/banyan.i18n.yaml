@@ -1,0 +1,13 @@
+# Bilingual-pair consistency record for banyan.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/subsystems/banyan.md
+/banyan-host-services:
+  en: 6ab6a3a93ea7c832
+  zh: 5241283b7b3aadb7
+/banyan-host-services/ctx-banyanfileops:
+  en: 1b9a46c3bdea94a2
+  zh: 00aeb00133d6597d
+/banyan-host-services/ctx-mobile:
+  en: de99a8bdb024070b
+  zh: 2a5a605bfe35b288

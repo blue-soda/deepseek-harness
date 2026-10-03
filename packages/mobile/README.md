@@ -1,8 +1,19 @@
+---
+description: "Android bridge capability and tool package navigation."
+kind: package-group
+---
+
 # mobile/ - Android mobile capability family
 
 English | [中文](README.zh.md)
 
+## Summary
+
 This family provides provider-neutral Android bridge execution plus the model-facing tools that consume it.
+
+## Table of Contents
+
+- [Banyan subsystem](../../docs/subsystems/banyan.md)
 
 | Package | Role | ctx key |
 |---|---|---|

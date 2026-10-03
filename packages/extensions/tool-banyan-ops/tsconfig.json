@@ -9,9 +9,6 @@
   ],
   "references": [
     {
-      "path": "../../../vendor/cosmokit"
-    },
-    {
       "path": "../../../vendor/cordis"
     },
     {
@@ -22,9 +19,6 @@
     },
     {
       "path": "../../core/system-prompt"
-    },
-    {
-      "path": "../../runtime-diagnostics/invariants"
     }
   ]
 }

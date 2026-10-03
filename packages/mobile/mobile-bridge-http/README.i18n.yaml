@@ -1,6 +1,31 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/mobile/mobile-bridge-http/README.md
-README.md: d988c6b745dfec6f4dcd3f791718b78c875d75df
-README.zh.md: 1a74bdfd2c20963f1d4edb15cd4a64fc6663ea5e
+/:
+  en: e3af8bfc78467987
+  zh: f579c8895a9699ce
+/deepseek-ai-dsh-mobile-bridge-http:
+  en: e29c92cba9aada4b
+  zh: 9f6fa7f34ab1b029
+/deepseek-ai-dsh-mobile-bridge-http/summary:
+  en: 453d08b9983353d7
+  zh: e9947933315fc1e7
+/deepseek-ai-dsh-mobile-bridge-http/table-of-contents:
+  en: 2e89ddb1e73218cb
+  zh: c100ad3595cf2b25
+/deepseek-ai-dsh-mobile-bridge-http/use-this-package:
+  en: 51b6bf4c93c16f96
+  zh: aef3d074f31cc407
+/deepseek-ai-dsh-mobile-bridge-http/model-experience:
+  en: 48d2091f3f6da733
+  zh: 48d2091f3f6da733
+/deepseek-ai-dsh-mobile-bridge-http/model-experience/kv-cache-effect:
+  en: c565ba801876db64
+  zh: cc21d1836a8dd3f1
+/deepseek-ai-dsh-mobile-bridge-http/known-limitations-and-deferred-work:
+  en: db3a2f1d2df4361b
+  zh: fe5b8c2ae69bf03f
+/deepseek-ai-dsh-mobile-bridge-http/known-limitations-and-deferred-work/dev-note:
+  en: b836f01bd0bceb4a
+  zh: a6ea1361c4a48df0

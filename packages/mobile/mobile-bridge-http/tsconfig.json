@@ -9,9 +9,6 @@
   ],
   "references": [
     {
-      "path": "../../../vendor/cosmokit"
-    },
-    {
       "path": "../../../vendor/cordis"
     },
     {
@@ -19,9 +16,6 @@
     },
     {
       "path": "../mobile"
-    },
-    {
-      "path": "../../runtime-diagnostics/invariants"
     }
   ]
 }

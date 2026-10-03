@@ -1,31 +1,57 @@
+---
+description: "Retrieve visible Banyan posts, shared skills, and knowledge documents for an Agent. Access follows the configured backend identity. This package grants retrieval tools without maintenance operations."
+kind: package-reference
+---
+
 # @deepseek-ai/dsh-tool-banyan-search
 
-Read-only Banyan content search and retrieval tools for user-facing Agents.
+English | [中文](README.zh.md)
 
-This package is intentionally separate from `@deepseek-ai/dsh-tool-banyan-ops`.
-Ordinary Agents can retrieve public, friend-visible, or self-owned Banyan
-content without receiving backend maintenance powers such as cache rebuild,
-outbox replay, or Elasticsearch reindex.
+## Summary
 
-## Tools
+Retrieve visible Banyan posts, shared skills, and knowledge documents for an Agent. Access follows the configured backend identity. This package grants retrieval tools without maintenance operations.
 
-- `banyan_content_search`: search Banyan shared posts and DSH skill shares.
-- `banyan_content_get`: fetch one visible content item with full Markdown body
-  and attachment metadata.
-- `banyan_skill_package_get`: fetch one visible DSH skill share as a normalized
-  import package with `SKILL.md`, parsed `name`/`description`, recommended
-  directory name, and references/scripts/templates attachment metadata.
-- `banyan_knowledge_search`: search visible Banyan knowledge chunks for
-  Agentic RAG.
-- `banyan_knowledge_get`: fetch one visible knowledge document with full
-  Markdown body.
+## Table of Contents
 
-## Configuration
+- [Use this package](#use-this-package)
+- [Model Experience](#model-experience)
+- [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
+- [Dev Note](#dev-note)
 
-```yaml
-- id: tool-banyan-search
-  name: '@deepseek-ai/dsh-tool-banyan-search'
-  config:
-    baseUrl: http://127.0.0.1:8080/api/v1
-    authTokenEnv: BANYAN_API_TOKEN
-```
+<a id="use-this-package"></a>
+## Use this package
+
+Mount this plugin in an Agent scope with `ctx.tools` available. Configure `baseUrl` and `authTokenEnv` for the backend. The [configuration catalog](../../../docs/config-catalog.md) owns all accepted settings; the [tool catalog](../../../docs/tool-catalog.md#deepseek-aidsh-tool-banyan-search) owns the five retrieval schemas. The optional Banyan bundle registers a search preset using this plugin.
+
+<a id="model-experience"></a>
+## Model Experience
+
+### Tools and guidance
+
+#### What the model sees
+
+The model receives five Banyan retrieval tool schemas and text results containing visible content and skill-package metadata. See the generated [tool catalog](../../../docs/tool-catalog.md#deepseek-aidsh-tool-banyan-search).
+
+#### Token effect
+
+Schemas consume tokens while mounted; retrieved Markdown and metadata consume result tokens.
+
+#### KV Cache effect
+
+Changing the mounted tools changes the request prefix; backend credentials affect execution only.
+
+## Known Limitations and Deferred Work
+
+<a id="known-limitations-and-deferred-work"></a>
+
+- Requires a reachable Banyan backend and an authorized identity.
+
+<a id="dev-note"></a>
+### Dev Note
+
+<details>
+<summary>Working context for maintainers</summary>
+
+None.
+
+</details>

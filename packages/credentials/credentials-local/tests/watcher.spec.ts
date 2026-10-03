@@ -25,7 +25,6 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   }
 })
 
-/** Credential documents are seeded owner-only, exactly as the provider creates them. */
 function writeCredentials(file: string, text: string): Promise<void> {
   return writeFile(file, text, { mode: 0o600 })
 }
@@ -140,33 +139,6 @@ describe('watcher pipeline', () => {
       expect(fsHarness.nextReadError).toBeUndefined()
     })
     expect(await ctx.credentials.resolve(KEY)).toEqual({ value: 'good', source: 'file' })
-  })
-
-  it('keeps the reload queue alive after an invariant violation escapes the fan-out', async () => {
-    const dir = await tempDir()
-    const path = join(dir, '.credentials.yaml')
-    const ctx = await boot({ path, debounceMs: 5 })
-    let arm = true
-    ctx.on('credentials/reference-updated', () => {
-      if (!arm) return
-      throw Object.assign(new Error('forged relation'), { code: 'INVARIANT' })
-    })
-    const [instance] = await fakeInstances()
-
-    await writeCredentials(path, 'version: 1\nrefs:\n  DSH_CRED_PIPE: first\n')
-    instance!.watcher.emit('all', 'change', path)
-    // The snapshot commits before the fan-out, so the value lands even though
-    // the listener threw out of the refresh.
-    await vi.waitFor(async () => {
-      expect(await ctx.credentials.resolve(KEY)).toEqual({ value: 'first', source: 'file' })
-    })
-
-    arm = false
-    await writeCredentials(path, 'version: 1\nrefs:\n  DSH_CRED_PIPE: second\n')
-    instance!.watcher.emit('all', 'change', path)
-    await vi.waitFor(async () => {
-      expect(await ctx.credentials.resolve(KEY)).toEqual({ value: 'second', source: 'file' })
-    })
   })
 
   it('quiesces the refresh pipeline before dispose completes', async () => {

@@ -1,19 +1,50 @@
+---
+description: "Copy a workspace, install a shared skill package, or prune Host-local session and cache files from a Banyan client. Filesystem operations run on the Host account. Copying rejects identical or nested paths, and skill files must remain inside the selected installation directory."
+kind: package-reference
+---
+
 # @blue-soda/dsh-host-banyan-file-ops
 
 English | [中文](README.zh.md)
 
-Banyan host-side filesystem operations for DeepSeek Harness.
+## Summary
 
-The plugin provides `ctx.banyanFileOps`, currently used by the Banyan client to
-copy an Agent workspace before switching that Agent's future sessions to a new
-workspace path, and to install shared Banyan Skill packages into the user's DSH
-skill root. Filesystem mutation stays on the DSH Host side; the browser UI only
-calls the typed Host RPC exposed by `@deepseek-ai/dsh-host-apiproxy`.
+Copy a workspace, install a shared skill package, or prune Host-local session and cache files from a Banyan client. Filesystem operations run on the Host account. Copying rejects identical or nested paths, and skill files must remain inside the selected installation directory.
 
-The copy operation is intentionally conservative: it rejects same/nested source
-and target paths and skips common generated/heavy directories such as
-`node_modules`, `.git`, `dist`, and `build`.
+## Table of Contents
 
-The Skill installer is also constrained: it writes one safe directory below
-`${DSH_HOME:-~/.dsh}/skills` by default, always owns `SKILL.md`, validates every
-relative file path, and rejects an existing Skill unless `overwrite` is set.
+- [Use this package](#use-this-package)
+- [Model Experience](#model-experience)
+- [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
+- [Dev Note](#dev-note)
+
+<a id="use-this-package"></a>
+## Use this package
+
+The optional bundle mounts this Host service. Its `banyanFileOps` Typert Remote namespace exposes `copyDirectory`, `installSkillPackage`, and `pruneData`. Clients use the current Gateway protocol. Skill installation defaults to the DSH skills root and rejects existing targets unless overwrite is requested. See the [Banyan subsystem](../../../docs/subsystems/banyan.md) for the service reference.
+
+<a id="model-experience"></a>
+## Model Experience
+
+None, as Host filesystem methods emit no model context or Session events.
+
+#### KV Cache effect
+
+This package does not change model request prefixes.
+
+## Known Limitations and Deferred Work
+
+<a id="known-limitations-and-deferred-work"></a>
+
+- Banyan clients using the removed apiproxy protocol require migration to Typert Remote.
+- Pruning deletes files under the selected Host data tree.
+
+<a id="dev-note"></a>
+### Dev Note
+
+<details>
+<summary>Working context for maintainers</summary>
+
+None.
+
+</details>

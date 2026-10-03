@@ -1,6 +1,25 @@
+---
+description: "Observe and operate Android apps, request confirmation, and access device memory through the bridge. Tool availability follows configuration."
+kind: package-reference
+---
+
 # @deepseek-ai/dsh-tool-mobile
 
 English | [中文](README.zh.md)
+
+## Summary
+
+Observe and operate Android apps, request confirmation, and access device memory through the bridge. Tool availability follows configuration.
+
+## Table of Contents
+
+- [Use this package](#use-this-package)
+- [Model Experience](#model-experience)
+- [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
+- [Dev Note](#dev-note)
+
+<a id="use-this-package"></a>
+## Use this package
 
 Model-facing Android mobile tools over `ctx.mobile`.
 
@@ -8,6 +27,7 @@ Model-facing Android mobile tools over `ctx.mobile`.
 
 Each Android execution with an owning agent appends log-only mobile events beside the generic `tool/call` and `tool/result` surface records. `mobile/bridge-connected` or `mobile/bridge-disconnected` records bridge reachability before execution, `mobile/tool-request` and `mobile/tool-result` preserve bridge request/result facts, and `mobile/approval-requested` plus `mobile/approval-decided` audit Android `user_confirm` decisions.
 
+<a id="model-experience"></a>
 ## Model Experience
 
 ### Mobile System Prompt
@@ -46,7 +66,19 @@ Invalidates the request prefix when enabled tool flags or schema text change; br
 
 ## Known Limitations and Deferred Work
 
+<a id="known-limitations-and-deferred-work"></a>
+
 - The output carries Android result payloads as JSON text until the mobile bridge schema stabilizes.
 - Memory tools currently rely on the Android bridge implementation for persistence, ranking, and redaction policy; vector recall is deferred.
 - `screen_observe(includeScreenshot=true)` is host-side. It requires adb plus the attachment service; when attachment storage is unavailable, `screen_observe` keeps the textual observation and reports the screenshot error.
 - `mobile_visual_step` is host-side and disabled by default. Tap actions are forwarded as normalized coordinates so the Android bridge can resolve the current display size.
+
+<a id="dev-note"></a>
+### Dev Note
+
+<details>
+<summary>Working context for maintainers</summary>
+
+None.
+
+</details>

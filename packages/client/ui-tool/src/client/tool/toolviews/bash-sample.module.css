@@ -4,12 +4,8 @@
 /* Summary line over the terminal card; the summary row keeps its own 24px
    height, so the card is a column around it rather than a change to it. */
 .card {
-  box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  width: 100%;
-  max-width: 100%;
-  min-width: 0;
 }
 
 /* Expanded terminal card, matching ToolRow's terminalBody: 4px indent, l1
@@ -21,7 +17,7 @@
   --dsl-terminal-line-height: 18px;
   --dsl-terminal-output-max-height: 224px;
   margin: 4px 0 4px 4px;
-  border: 1px solid var(--dsw-alias-border-l1);
+  border: 0.5px solid var(--dsw-alias-border-l1);
 }
 
 /* A bash execution error can settle without terminal-card material (for
@@ -31,8 +27,8 @@
   display: flex;
   flex-direction: column;
   margin: 4px 0 4px 4px;
-  border: 1px solid var(--dsw-alias-border-l1);
-  border-radius: 12px;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-radius-lg);
   background: var(--dsw-alias-markdown-code-block);
   font: var(--dsw-font-markdown-code-block-small);
 }
@@ -50,7 +46,7 @@
 .ioSection::-webkit-scrollbar-thumb {
   border: 2px solid transparent;
   background-clip: padding-box;
-  border-radius: 6px;
+  border-radius: var(--dsw-radius-sm);
 }
 
 .ioSection::-webkit-scrollbar-track {
@@ -66,7 +62,7 @@
 
 .ioDivider {
   flex: none;
-  height: 1px;
+  height: 0.5px;
   background: var(--dsw-alias-border-l2);
 }
 
@@ -89,54 +85,49 @@
 }
 
 .root {
-  position: relative; /* sweep-glare overlay anchor */
-  box-sizing: border-box;
-  overflow: hidden;
   display: flex;
   align-items: center;
-  width: 100%;
-  max-width: 100%;
-  height: 24px;
+  height: calc(24px + var(--dsh-content-font-delta, 0px));
   min-width: 0;
+  color: var(--dsw-alias-label-tertiary);
+  transition: color 100ms ease;
 }
 
-/* Running sweep glare — same deepsuite ShimmerText pattern as ToolRow. */
-.root[data-state='running']::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  width: 300px;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    color-mix(in srgb, var(--dsw-alias-bg-base) 60%, transparent) 55%,
-    transparent 100%
-  );
-  animation: dsh-bash-row-sweep 2.6s ease-out infinite;
-  pointer-events: none;
+.root:hover {
+  color: var(--dsw-alias-label-secondary);
 }
 
-@keyframes dsh-bash-row-sweep {
-  0% { left: -300px; }
-  90%, 100% { left: 100%; }
+@media (prefers-reduced-motion: reduce) {
+  .root {
+    transition: none;
+  }
 }
 
 .leading {
   position: relative; /* .chevronHover overlay anchor */
   flex: none;
-  width: 16px;
-  height: 16px;
+  width: calc(16px + var(--dsh-content-font-delta, 0px));
+  height: calc(16px + var(--dsh-content-font-delta, 0px));
   display: inline-flex;
   align-items: center;
   justify-content: center;
   margin-right: 6px;
-  color: var(--dsw-alias-label-tertiary);
+  color: inherit;
+}
+
+/* Same glyph-scaling rule as DisclosureRow's leading: the CSS edge overrides
+   the svg attributes so the 14px business glyph follows the font-size delta.
+   TODO: this bash header duplicates the DisclosureRow structure (and this is
+   the fourth copy of the glyph rule, with DisclosureRow, MessageItem
+   .compactionLeading, and MessageIconActions); migrating the bash row onto
+   the shared DisclosureRow would collapse them to one. */
+.leading svg:not([data-state]) {
+  width: calc(14px + var(--dsh-content-font-delta, 0px));
+  height: calc(14px + var(--dsh-content-font-delta, 0px));
 }
 
 .chevron {
-  color: var(--dsw-alias-label-secondary);
+  color: inherit;
 }
 
 /* Hover preview on the expandable row: the idle icon crossfades (100ms) into
@@ -164,15 +155,9 @@
 }
 
 .title {
-  flex: 0 1 auto;
-  min-width: min(4ch, 100%);
-  max-width: min(18ch, calc(100% - 32px));
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 14px;
-  line-height: 24px;
-  color: var(--dsw-alias-label-secondary);
+  flex: none;
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  line-height: calc(24px + var(--dsh-content-font-delta, 0px));
 }
 
 .sep {
@@ -190,14 +175,17 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 14px;
-  line-height: 24px;
-  color: var(--dsw-alias-label-tertiary);
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  line-height: calc(24px + var(--dsh-content-font-delta, 0px));
 }
 
 /* Error row's collapsed summary: the failure's first line in the error color. */
 .errorSummary {
   color: var(--dsw-alias-state-error-primary);
+}
+
+.stoppedSummary {
+  color: var(--dsw-alias-state-warn-label);
 }
 
 /* Hover-revealed Inspect pill under the expanded terminal's bottom-left —
@@ -216,8 +204,9 @@
   gap: 4px;
   margin: 4px 0 2px 4px;
   padding: 2px 8px;
-  border: 1px solid var(--dsw-alias-border-l2);
+  border: 0.5px solid var(--dsw-alias-border-l4);
   border-radius: 999px;
+  corner-shape: round;
   /* Base background, not bg-overlay: the overlay token reads too heavy. */
   background: var(--dsw-alias-bg-base);
   color: var(--dsw-alias-label-secondary);

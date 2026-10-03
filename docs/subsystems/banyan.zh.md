@@ -36,6 +36,30 @@ Host-side filesystem operations for Banyan UI plugins (workspace migration, skil
 
 ```ts cordis-catalog
 /**
+ * Copy a directory through the optional Banyan Remote namespace.
+ * @param options Source, target, overwrite and exclusion policy.
+ * @param signal Caller cancellation.
+ * @returns Copied and skipped entry counts.
+ */
+@Remote('copyDirectory') copyDirectoryRemote(options: Omit<DirectoryCopyOptions, 'signal'>, signal: AbortSignal): Promise<DirectoryCopyResult>
+
+/**
+ * Install a shared Skill through the optional Banyan Remote namespace.
+ * @param options Skill directory and text files.
+ * @param signal Caller cancellation.
+ * @returns Installed path and file counts.
+ */
+@Remote('installSkillPackage') installSkillPackageRemote(options: Omit<InstallBanyanSkillPackageOptions, 'signal'>, signal: AbortSignal): Promise<InstallBanyanSkillPackageResult>
+
+/**
+ * Clear Host logs or cache through the optional Banyan Remote namespace.
+ * @param request Data tree to prune.
+ * @param signal Caller cancellation.
+ * @returns Removed file and byte counts.
+ */
+@Remote('pruneData') pruneDataRemote(request: Omit<PruneDataOptions, 'signal'>, signal: AbortSignal): Promise<PruneDataResult>
+
+/**
  * Recursively copy a directory tree to a target path, skipping default ignore names.
  * @param options Copy source/target paths and optional overwrite/skip rules.
  * @returns Copy counters and the resolved source/target paths.

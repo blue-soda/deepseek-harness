@@ -1,6 +1,25 @@
+---
+description: "通过桥接观察及操作 Android 应用、请求用户确认并访问设备记忆。工具是否可用由配置决定。"
+kind: package-reference
+---
+
 # @deepseek-ai/dsh-tool-mobile
 
 [English](README.md) | 中文
+
+## 概述
+
+通过桥接观察及操作 Android 应用、请求用户确认并访问设备记忆。工具是否可用由配置决定。
+
+## 目录
+
+- [Use this package](#use-this-package)
+- [Model Experience](#model-experience)
+- [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
+- [Dev Note](#dev-note)
+
+<a id="use-this-package"></a>
+## 使用此包
 
 基于 `ctx.mobile` 的模型可见 Android 移动端工具。
 
@@ -8,6 +27,7 @@
 
 每次带有所属 agent 的 Android 执行，都会在通用 `tool/call` 和 `tool/result` surface 记录旁追加 log-only mobile events。`mobile/bridge-connected` 或 `mobile/bridge-disconnected` 记录执行前的 bridge 可达性，`mobile/tool-request` 与 `mobile/tool-result` 保留 bridge 请求/结果事实，`mobile/approval-requested` 与 `mobile/approval-decided` 审计 Android `user_confirm` 决策。
 
+<a id="model-experience"></a>
 ## Model Experience
 
 ### Mobile System Prompt
@@ -46,7 +66,19 @@ Use Android mobile tools to observe and operate the current phone through the lo
 
 ## Known Limitations and Deferred Work
 
+<a id="known-limitations-and-deferred-work"></a>
+
 - 在 mobile bridge schema 稳定前，输出以 JSON 文本携带 Android result payload。
 - 记忆工具当前依赖 Android bridge 实现持久化、排序和脱敏策略；向量召回待后续接入。
 - `screen_observe(includeScreenshot=true)` 位于主机侧。它需要 adb 和 attachment service；如果附件存储不可用，`screen_observe` 会保留文本观察并报告截图错误。
 - `mobile_visual_step` 位于主机侧，默认关闭。tap 动作会作为归一化坐标转交 Android bridge，由 bridge 按当前显示尺寸解析。
+
+<a id="dev-note"></a>
+### 开发备注
+
+<details>
+<summary>维护者工作记录</summary>
+
+无。
+
+</details>

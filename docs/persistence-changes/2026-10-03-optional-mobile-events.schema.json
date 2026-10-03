@@ -1,0 +1,667 @@
+{
+  "formatVersion": 2,
+  "roots": [
+    {
+      "key": "event:mobile/approval-decided",
+      "kind": "event",
+      "event": "mobile/approval-decided",
+      "surface": false,
+      "digest": "02d0cb6ebf9aaa73729d81198409da944b114dae1c7b862280b4acc7951a5f37",
+      "schema": {
+        "root": 0,
+        "nodes": [
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "data",
+                "type": 1,
+                "optional": false
+              },
+              {
+                "name": "ignorable",
+                "type": 6,
+                "optional": true
+              },
+              {
+                "name": "seq",
+                "type": 4,
+                "optional": false
+              },
+              {
+                "name": "time",
+                "type": 4,
+                "optional": false
+              },
+              {
+                "name": "type",
+                "type": 7,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "approved",
+                "type": 2,
+                "optional": false
+              },
+              {
+                "name": "callId",
+                "type": 3,
+                "optional": false
+              },
+              {
+                "name": "durationMs",
+                "type": 4,
+                "optional": false
+              },
+              {
+                "name": "error",
+                "type": 5,
+                "optional": true
+              },
+              {
+                "name": "requestId",
+                "type": 3,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "primitive",
+            "type": "boolean"
+          },
+          {
+            "kind": "primitive",
+            "type": "string"
+          },
+          {
+            "kind": "primitive",
+            "type": "number"
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "code",
+                "type": 3,
+                "optional": false
+              },
+              {
+                "name": "message",
+                "type": 3,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "literal",
+            "value": true
+          },
+          {
+            "kind": "literal",
+            "value": "mobile/approval-decided"
+          }
+        ]
+      }
+    },
+    {
+      "key": "event:mobile/approval-requested",
+      "kind": "event",
+      "event": "mobile/approval-requested",
+      "surface": false,
+      "digest": "ae87d6c26b3011e8a25ff957a486dafb271d1a4d10862b269ed497dad4b5e331",
+      "schema": {
+        "root": 0,
+        "nodes": [
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "data",
+                "type": 1,
+                "optional": false
+              },
+              {
+                "name": "ignorable",
+                "type": 4,
+                "optional": true
+              },
+              {
+                "name": "seq",
+                "type": 3,
+                "optional": false
+              },
+              {
+                "name": "time",
+                "type": 3,
+                "optional": false
+              },
+              {
+                "name": "type",
+                "type": 5,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "callId",
+                "type": 2,
+                "optional": false
+              },
+              {
+                "name": "detail",
+                "type": 2,
+                "optional": false
+              },
+              {
+                "name": "requestId",
+                "type": 2,
+                "optional": false
+              },
+              {
+                "name": "timeoutMs",
+                "type": 3,
+                "optional": true
+              },
+              {
+                "name": "title",
+                "type": 2,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "primitive",
+            "type": "string"
+          },
+          {
+            "kind": "primitive",
+            "type": "number"
+          },
+          {
+            "kind": "literal",
+            "value": true
+          },
+          {
+            "kind": "literal",
+            "value": "mobile/approval-requested"
+          }
+        ]
+      }
+    },
+    {
+      "key": "event:mobile/bridge-connected",
+      "kind": "event",
+      "event": "mobile/bridge-connected",
+      "surface": false,
+      "digest": "b69e98a0e34b90603b94a166725876da0d1417390bf9352e71d61a2b5a7baecd",
+      "schema": {
+        "root": 0,
+        "nodes": [
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "data",
+                "type": 1,
+                "optional": false
+              },
+              {
+                "name": "ignorable",
+                "type": 9,
+                "optional": true
+              },
+              {
+                "name": "seq",
+                "type": 8,
+                "optional": false
+              },
+              {
+                "name": "time",
+                "type": 8,
+                "optional": false
+              },
+              {
+                "name": "type",
+                "type": 10,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "callId",
+                "type": 2,
+                "optional": false
+              },
+              {
+                "name": "requestId",
+                "type": 2,
+                "optional": false
+              },
+              {
+                "name": "status",
+                "type": 3,
+                "optional": false
+              },
+              {
+                "name": "tool",
+                "type": 2,
+                "optional": false
+              },
+              {
+                "name": "toolCount",
+                "type": 8,
+                "optional": false
+              },
+              {
+                "name": "version",
+                "type": 2,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "primitive",
+            "type": "string"
+          },
+          {
+            "kind": "union",
+            "types": [
+              4,
+              5,
+              6,
+              7
+            ]
+          },
+          {
+            "kind": "literal",
+            "value": "connected"
+          },
+          {
+            "kind": "literal",
+            "value": "error"
+          },
+          {
+            "kind": "literal",
+            "value": "listening"
+          },
+          {
+            "kind": "literal",
+            "value": "stopped"
+          },
+          {
+            "kind": "primitive",
+            "type": "number"
+          },
+          {
+            "kind": "literal",
+            "value": true
+          },
+          {
+            "kind": "literal",
+            "value": "mobile/bridge-connected"
+          }
+        ]
+      }
+    },
+    {
+      "key": "event:mobile/bridge-disconnected",
+      "kind": "event",
+      "event": "mobile/bridge-disconnected",
+      "surface": false,
+      "digest": "ab011825be9b92d18195e58c885dfd2895368ab013d75975fb1f2ea7e30e2f8f",
+      "schema": {
+        "root": 0,
+        "nodes": [
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "data",
+                "type": 1,
+                "optional": false
+              },
+              {
+                "name": "ignorable",
+                "type": 4,
+                "optional": true
+              },
+              {
+                "name": "seq",
+                "type": 5,
+                "optional": false
+              },
+              {
+                "name": "time",
+                "type": 5,
+                "optional": false
+              },
+              {
+                "name": "type",
+                "type": 6,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "callId",
+                "type": 2,
+                "optional": false
+              },
+              {
+                "name": "error",
+                "type": 3,
+                "optional": false
+              },
+              {
+                "name": "requestId",
+                "type": 2,
+                "optional": false
+              },
+              {
+                "name": "tool",
+                "type": 2,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "primitive",
+            "type": "string"
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "code",
+                "type": 2,
+                "optional": false
+              },
+              {
+                "name": "message",
+                "type": 2,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "literal",
+            "value": true
+          },
+          {
+            "kind": "primitive",
+            "type": "number"
+          },
+          {
+            "kind": "literal",
+            "value": "mobile/bridge-disconnected"
+          }
+        ]
+      }
+    },
+    {
+      "key": "event:mobile/tool-request",
+      "kind": "event",
+      "event": "mobile/tool-request",
+      "surface": false,
+      "digest": "f731c2c102f2f5ca0f3dd694528e972c65d2a685bc05ecadefded4d094606db2",
+      "schema": {
+        "root": 0,
+        "nodes": [
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "data",
+                "type": 1,
+                "optional": false
+              },
+              {
+                "name": "ignorable",
+                "type": 8,
+                "optional": true
+              },
+              {
+                "name": "seq",
+                "type": 9,
+                "optional": false
+              },
+              {
+                "name": "time",
+                "type": 9,
+                "optional": false
+              },
+              {
+                "name": "type",
+                "type": 10,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "argumentsJson",
+                "type": 2,
+                "optional": false
+              },
+              {
+                "name": "bridgeSessionId",
+                "type": 2,
+                "optional": true
+              },
+              {
+                "name": "callId",
+                "type": 2,
+                "optional": false
+              },
+              {
+                "name": "requestId",
+                "type": 2,
+                "optional": false
+              },
+              {
+                "name": "risk",
+                "type": 3,
+                "optional": false
+              },
+              {
+                "name": "tool",
+                "type": 2,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "primitive",
+            "type": "string"
+          },
+          {
+            "kind": "union",
+            "types": [
+              4,
+              5,
+              6,
+              7
+            ]
+          },
+          {
+            "kind": "literal",
+            "value": "external_side_effect"
+          },
+          {
+            "kind": "literal",
+            "value": "read_only"
+          },
+          {
+            "kind": "literal",
+            "value": "reversible"
+          },
+          {
+            "kind": "literal",
+            "value": "sensitive"
+          },
+          {
+            "kind": "literal",
+            "value": true
+          },
+          {
+            "kind": "primitive",
+            "type": "number"
+          },
+          {
+            "kind": "literal",
+            "value": "mobile/tool-request"
+          }
+        ]
+      }
+    },
+    {
+      "key": "event:mobile/tool-result",
+      "kind": "event",
+      "event": "mobile/tool-result",
+      "surface": false,
+      "digest": "440c961020e5999cc362405bc9850120037f5cd0ae9938fd6ae08ec72bd8ce31",
+      "schema": {
+        "root": 0,
+        "nodes": [
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "data",
+                "type": 1,
+                "optional": false
+              },
+              {
+                "name": "ignorable",
+                "type": 6,
+                "optional": true
+              },
+              {
+                "name": "seq",
+                "type": 3,
+                "optional": false
+              },
+              {
+                "name": "time",
+                "type": 3,
+                "optional": false
+              },
+              {
+                "name": "type",
+                "type": 7,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "callId",
+                "type": 2,
+                "optional": false
+              },
+              {
+                "name": "durationMs",
+                "type": 3,
+                "optional": false
+              },
+              {
+                "name": "error",
+                "type": 4,
+                "optional": true
+              },
+              {
+                "name": "ok",
+                "type": 5,
+                "optional": false
+              },
+              {
+                "name": "requestId",
+                "type": 2,
+                "optional": false
+              },
+              {
+                "name": "resultJson",
+                "type": 2,
+                "optional": false
+              },
+              {
+                "name": "tool",
+                "type": 2,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "primitive",
+            "type": "string"
+          },
+          {
+            "kind": "primitive",
+            "type": "number"
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "code",
+                "type": 2,
+                "optional": false
+              },
+              {
+                "name": "message",
+                "type": 2,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "primitive",
+            "type": "boolean"
+          },
+          {
+            "kind": "literal",
+            "value": true
+          },
+          {
+            "kind": "literal",
+            "value": "mobile/tool-result"
+          }
+        ]
+      }
+    }
+  ],
+  "types": []
+}

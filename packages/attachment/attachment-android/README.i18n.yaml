@@ -1,0 +1,31 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/attachment/attachment-android/README.md
+/:
+  en: 40959d7d11fcba1e
+  zh: 3504935c5390235d
+/deepseek-ai-dsh-attachment-android:
+  en: 7f52e67f6e4bfab2
+  zh: 91bcf0e363b41dbf
+/deepseek-ai-dsh-attachment-android/summary:
+  en: 274553e3a0a93992
+  zh: 188da4447322b50b
+/deepseek-ai-dsh-attachment-android/table-of-contents:
+  en: 2e89ddb1e73218cb
+  zh: c100ad3595cf2b25
+/deepseek-ai-dsh-attachment-android/use-this-package:
+  en: b06fab658d69d86c
+  zh: e4a7ed16e8dd6bb0
+/deepseek-ai-dsh-attachment-android/model-experience:
+  en: 48d2091f3f6da733
+  zh: 48d2091f3f6da733
+/deepseek-ai-dsh-attachment-android/model-experience/kv-cache-effect:
+  en: c565ba801876db64
+  zh: cc21d1836a8dd3f1
+/deepseek-ai-dsh-attachment-android/known-limitations-and-deferred-work:
+  en: fae5b5785c8cb7cb
+  zh: 9bbd33b589e9b396
+/deepseek-ai-dsh-attachment-android/known-limitations-and-deferred-work/dev-note:
+  en: b836f01bd0bceb4a
+  zh: a6ea1361c4a48df0

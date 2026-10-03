@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-10-03-optional-banyan-composition.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-03-optional-banyan-composition.md
+/agent-note-optional-banyan-composition:
+  en: f13322c9a1a1376f
+  zh: 34e864d183b7578b
+/agent-note-optional-banyan-composition/problem:
+  en: 72025b7c622f1fd8
+  zh: ff189f194ccd28e5
+/agent-note-optional-banyan-composition/decision:
+  en: 2051d0a7f731a219
+  zh: 7dc2510d633d2eaf
+/agent-note-optional-banyan-composition/alternatives-considered:
+  en: 5685908557654254
+  zh: fa3a0176ac41ba4f
+/agent-note-optional-banyan-composition/consequences:
+  en: c8dcf008ce6ce656
+  zh: 7e82bec19568cad3

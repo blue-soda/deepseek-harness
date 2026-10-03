@@ -1,0 +1,5 @@
+- insert:
+    - id: banyan-file-ops
+      name: "@blue-soda/dsh-host-banyan-file-ops"
+    - id: banyan-ui-authoring
+      name: "@blue-soda/dsh-banyan-ui-authoring"

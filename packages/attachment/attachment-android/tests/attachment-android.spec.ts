@@ -44,9 +44,9 @@ describe('android attachment store', () => {
     await withStore(async (store) => {
       const ref = await store.saveImage({ data: PNG, mediaType: 'image/png' })
 
-      await expect(store.readImageRequest(ref, { maxBytes: PNG.byteLength, maxPixels: 1 }))
+      await expect(store.readImageRequest(ref, { maxBytes: PNG.byteLength, width: 1, height: 1 }))
         .resolves.toMatchObject({ attachment: ref, data: PNG, mediaType: 'image/png', width: 1, height: 1 })
-      await expect(store.readImageRequest(ref, { maxBytes: PNG.byteLength - 1, maxPixels: 1 }))
+      await expect(store.readImageRequest(ref, { maxBytes: PNG.byteLength - 1, width: 1, height: 1 }))
         .rejects.toMatchObject({ code: 'IMAGE_TOO_LARGE' })
     })
   })
@@ -124,7 +124,7 @@ describe('android attachment store', () => {
       bridgeBaseUrl: 'http://127.0.0.1:8765',
       bridgeToken: 'token',
     })
-    const request = await store.readImageRequest(ref, { maxPixels: 640_000, maxBytes: 1024 * 1024 })
+    const request = await store.readImageRequest(ref, { width: 800, height: 800, maxBytes: 1024 * 1024 })
 
     expect(request).toMatchObject({ attachment: ref, mediaType: 'image/png', width: 1, height: 1, bytes: PNG.byteLength })
     expect(calls).toHaveLength(1)

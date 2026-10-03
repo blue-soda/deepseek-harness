@@ -1,0 +1,34 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/bundle/banyan/README.md
+/:
+  en: 855edf572e23d626
+  zh: 68875f1773c6cf9d
+/optional-banyan-bundle:
+  en: 5ab608183ff075a9
+  zh: a54b004475ff25a8
+/optional-banyan-bundle/summary:
+  en: 6f7ca29b1828d1f5
+  zh: f8e82a121ae9b6c4
+/optional-banyan-bundle/table-of-contents:
+  en: 2e89ddb1e73218cb
+  zh: c100ad3595cf2b25
+/optional-banyan-bundle/use-this-package:
+  en: 6c5de4b142ce1e30
+  zh: e0b4f72700fcbfc6
+/optional-banyan-bundle/client-api:
+  en: 051d85c65dd63c0a
+  zh: b0f4570336114548
+/optional-banyan-bundle/model-experience:
+  en: df0af09e589fe391
+  zh: df0af09e589fe391
+/optional-banyan-bundle/model-experience/kv-cache-effect:
+  en: c565ba801876db64
+  zh: cc21d1836a8dd3f1
+/optional-banyan-bundle/known-limitations-and-deferred-work:
+  en: e34492edfa995b1a
+  zh: 968cd008806850aa
+/optional-banyan-bundle/known-limitations-and-deferred-work/dev-note:
+  en: b836f01bd0bceb4a
+  zh: a6ea1361c4a48df0

@@ -1,0 +1,5 @@
+- id: search
+  name: cordis:search
+  config:
+    baseUrl: http://127.0.0.1:8080/api/v1
+    authTokenEnv: BANYAN_TEST_UNUSED_TOKEN

@@ -3,6 +3,8 @@
  * @module @deepseek-ai/dsh-tool-mobile
  */
 
+import './events.ts'
+
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'

@@ -1,0 +1,68 @@
+{
+  "name": "@blue-soda/dsh-banyan",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Optional Banyan Host services and mobile, search, and operations presets",
+  "dsh": {
+    "bundle": {
+      "patch": [
+        "./cordis.patch.yml",
+        "./presets/mobile.patch.yml",
+        "./presets/banyan-ops.patch.yml",
+        "./presets/banyan-search.patch.yml"
+      ]
+    }
+  },
+  "files": [
+    "cordis.patch.yml",
+    "presets",
+    "lib/index.js",
+    "lib/types/**/*.d.ts"
+  ],
+  "dependencies": {
+    "@deepseek-ai/dsh-attachment-android": "workspace:*",
+    "@deepseek-ai/dsh-attachment-basic": "workspace:*",
+    "@deepseek-ai/dsh-mobile": "workspace:*",
+    "@deepseek-ai/dsh-mobile-bridge-http": "workspace:*",
+    "@deepseek-ai/dsh-tool-mobile": "workspace:*",
+    "@deepseek-ai/dsh-subprocess-android": "workspace:*",
+    "@deepseek-ai/dsh-tool-banyan-ops": "workspace:*",
+    "@deepseek-ai/dsh-tool-banyan-search": "workspace:*",
+    "@blue-soda/dsh-banyan-ui-authoring": "workspace:*",
+    "@blue-soda/dsh-host-banyan-file-ops": "workspace:*",
+    "@deepseek-ai/dsh-agent-preset": "workspace:*",
+    "@deepseek-ai/dsh-persona": "workspace:*",
+    "@deepseek-ai/dsh-agent-instructions": "workspace:*",
+    "@deepseek-ai/dsh-tool-todo": "workspace:*",
+    "@deepseek-ai/dsh-tool-fs": "workspace:*",
+    "@deepseek-ai/dsh-tool-fs-search": "workspace:*",
+    "@deepseek-ai/dsh-tool-bash": "workspace:*",
+    "@deepseek-ai/dsh-tool-pwsh": "workspace:*",
+    "@deepseek-ai/dsh-tool-cordis": "workspace:*",
+    "@deepseek-ai/dsh-skill-filesystem": "workspace:*",
+    "@deepseek-ai/dsh-tool-skill": "workspace:*"
+  },
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json",
+    "./presets/*.patch.yml": "./presets/*.patch.yml",
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "workspace:~"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "workspace:~",
+    "@deepseek-ai/dsh-fs-local": "workspace:*",
+    "@deepseek-ai/dsh-subprocess-local": "workspace:*",
+    "@deepseek-ai/dsh-skill": "workspace:*",
+    "@deepseek-ai/dsh-cordis-host-runner": "workspace:*",
+    "@deepseek-ai/dsh-agent": "workspace:*"
+  }
+}

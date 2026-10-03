@@ -1,0 +1,31 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/subprocess/subprocess-android/README.md
+/:
+  en: 8d17f8475c375f75
+  zh: 34ed1e954818e19e
+/deepseek-ai-dsh-subprocess-android:
+  en: 84f8b830d5cd875b
+  zh: 81fb262f82b611b0
+/deepseek-ai-dsh-subprocess-android/summary:
+  en: 339b5806781b7699
+  zh: 0021f0ec4bb4bcae
+/deepseek-ai-dsh-subprocess-android/table-of-contents:
+  en: 2e89ddb1e73218cb
+  zh: c100ad3595cf2b25
+/deepseek-ai-dsh-subprocess-android/use-this-package:
+  en: 5d7aed0defccfc53
+  zh: c54452c6306730d7
+/deepseek-ai-dsh-subprocess-android/model-experience:
+  en: 48d2091f3f6da733
+  zh: 48d2091f3f6da733
+/deepseek-ai-dsh-subprocess-android/model-experience/kv-cache-effect:
+  en: c565ba801876db64
+  zh: cc21d1836a8dd3f1
+/deepseek-ai-dsh-subprocess-android/known-limitations-and-deferred-work:
+  en: fae5b5785c8cb7cb
+  zh: 9bbd33b589e9b396
+/deepseek-ai-dsh-subprocess-android/known-limitations-and-deferred-work/dev-note:
+  en: b836f01bd0bceb4a
+  zh: a6ea1361c4a48df0

@@ -1,6 +1,58 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/mobile/tool-mobile/README.md
-README.md: 13ac7a7ad4907ed45b8147cbcbb93d10ea8c0180
-README.zh.md: d5f9a3a95fe0562a43959e86c0cdaf9f1efce478
+/:
+  en: 8ac57aa8c95e6382
+  zh: 707e4ae048b754f8
+/deepseek-ai-dsh-tool-mobile:
+  en: 1784c8ddbfaf300b
+  zh: 868be09e9c1b70e7
+/deepseek-ai-dsh-tool-mobile/summary:
+  en: 1f2459760d1c5619
+  zh: 4ce923368d1ffbc6
+/deepseek-ai-dsh-tool-mobile/table-of-contents:
+  en: 2e89ddb1e73218cb
+  zh: c100ad3595cf2b25
+/deepseek-ai-dsh-tool-mobile/use-this-package:
+  en: 9f5a761371a7d2f0
+  zh: d1490bb00a9d7385
+/deepseek-ai-dsh-tool-mobile/session-log:
+  en: c93d34bf16cf5db8
+  zh: 2a323a7c9fdea1fe
+/deepseek-ai-dsh-tool-mobile/model-experience:
+  en: 215e7ba838619b7b
+  zh: 215e7ba838619b7b
+/deepseek-ai-dsh-tool-mobile/model-experience/mobile-system-prompt:
+  en: 2f0ebf1c5055e1ae
+  zh: 2f0ebf1c5055e1ae
+/deepseek-ai-dsh-tool-mobile/model-experience/mobile-system-prompt/what-the-model-sees:
+  en: f34d01e3d4c2ecbb
+  zh: 7e8d4aca0de7ea32
+/deepseek-ai-dsh-tool-mobile/model-experience/mobile-system-prompt/what-the-model-sees/section-text:
+  en: 0f7724bcd908c288
+  zh: 0f7724bcd908c288
+/deepseek-ai-dsh-tool-mobile/model-experience/mobile-system-prompt/token-effect:
+  en: a3f7641a98cc37b3
+  zh: 1da1b491ff7647e9
+/deepseek-ai-dsh-tool-mobile/model-experience/mobile-system-prompt/kv-cache-effect:
+  en: e879d1a36bec9ecd
+  zh: a51b7bf2b0616f7f
+/deepseek-ai-dsh-tool-mobile/model-experience/android-tool-suite:
+  en: 06f09065fe583f03
+  zh: 06f09065fe583f03
+/deepseek-ai-dsh-tool-mobile/model-experience/android-tool-suite/what-the-model-sees:
+  en: 4b4129b049931e8f
+  zh: 58bfbe9abbf9e609
+/deepseek-ai-dsh-tool-mobile/model-experience/android-tool-suite/token-effect:
+  en: 1965fa8c55afa51f
+  zh: 47eea9dac70b980a
+/deepseek-ai-dsh-tool-mobile/model-experience/android-tool-suite/kv-cache-effect:
+  en: 51457ab1d046570d
+  zh: ee095f9047ffda73
+/deepseek-ai-dsh-tool-mobile/known-limitations-and-deferred-work:
+  en: ec1c4acd9698b7fb
+  zh: ed7031239ac79e95
+/deepseek-ai-dsh-tool-mobile/known-limitations-and-deferred-work/dev-note:
+  en: b836f01bd0bceb4a
+  zh: a6ea1361c4a48df0

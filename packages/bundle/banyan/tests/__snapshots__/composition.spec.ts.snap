@@ -1,0 +1,13 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`loads optional declarations from YAML and releases tools and Host services on removal 1`] = `
+"# Banyan UI Plugins
+
+When the user asks you to customize Banyan UI, inspect the current client capabilities before writing a removable client plugin.
+
+Call cordis_inspect_list and look for a Client provider named BanyanUI. Query its declared authoring methods with cordis_inspect_query. Use the returned slot names, theme tokens, and service methods; do not guess APIs. If the provider is absent, work in the Banyan client repository or report the missing integration.
+
+Keep Banyan-specific presentation in a separate client plugin. Use the current plugin-authoring skills and package structure. Install a reviewed bundle through the available Plugin Manager only when its client entry and dependencies are ready. Inspection tools are read-only and cannot install or execute generated plugins.
+
+If the client declares banyanUiExtensions.installUserUiPlugin, follow the declared input fields and verify the installed plugin through the declared inspection method. The user must be able to enable, disable, and remove the plugin in Banyan settings. Native Android UI, permissions, and packaged runtime changes require source changes and an app rebuild."
+`;

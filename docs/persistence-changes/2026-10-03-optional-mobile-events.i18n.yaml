@@ -1,0 +1,28 @@
+# Bilingual-pair consistency record for 2026-10-03-optional-mobile-events.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/persistence-changes/2026-10-03-optional-mobile-events.md
+/:
+  en: 3d5a424ae7d7e46b
+  zh: c22a8e4a62d8cc1a
+/2026-10-03-optional-mobile-events:
+  en: 8a8dcc7834d7ecd6
+  zh: e4942a3a8121e7c8
+/2026-10-03-optional-mobile-events/summary:
+  en: f2f892d657d3b760
+  zh: c9233f985e8f95a5
+/2026-10-03-optional-mobile-events/table-of-contents:
+  en: 6cf314a069ceb451
+  zh: 9adff678e9ecab3b
+/2026-10-03-optional-mobile-events/declaration:
+  en: 6907136f28e48c90
+  zh: 02f8298485f3d8e7
+/2026-10-03-optional-mobile-events/compatibility:
+  en: 77c7d0b495f3bffc
+  zh: 04c23d056329d032
+/2026-10-03-optional-mobile-events/verification:
+  en: 0bd25ceefe6f25f0
+  zh: 3b31c4d8d1c37edf
+/2026-10-03-optional-mobile-events/dev-note:
+  en: b75c8458928b72b9
+  zh: 003ba4e17b4b5269

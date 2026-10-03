@@ -1,0 +1,43 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/extensions/banyan-ui-authoring/README.md
+/:
+  en: b34d4b5bbf9b44f5
+  zh: e02274ed605ba9e3
+/banyan-ui-authoring:
+  en: a926419854cbff7b
+  zh: 2d9bc8d698a7822a
+/banyan-ui-authoring/summary:
+  en: 393c1e7da2d0b51b
+  zh: 854abaf0b4992dac
+/banyan-ui-authoring/table-of-contents:
+  en: 2e89ddb1e73218cb
+  zh: c100ad3595cf2b25
+/banyan-ui-authoring/use-this-package:
+  en: 2f677da04c9ec034
+  zh: 29bbe0343982f596
+/banyan-ui-authoring/model-experience:
+  en: 215e7ba838619b7b
+  zh: 215e7ba838619b7b
+/banyan-ui-authoring/model-experience/banyan-ui-authoring-system-prompt:
+  en: 93de89a16f11a5a2
+  zh: 93de89a16f11a5a2
+/banyan-ui-authoring/model-experience/banyan-ui-authoring-system-prompt/what-the-model-sees:
+  en: 4120d75d1b671ebf
+  zh: 011d6c4402947d22
+/banyan-ui-authoring/model-experience/banyan-ui-authoring-system-prompt/what-the-model-sees/prompt-excerpt:
+  en: e2d3ce6036698c07
+  zh: e2d3ce6036698c07
+/banyan-ui-authoring/model-experience/banyan-ui-authoring-system-prompt/token-effect:
+  en: cd835842c7e8b4a1
+  zh: ccff0a4eb3d26e49
+/banyan-ui-authoring/model-experience/banyan-ui-authoring-system-prompt/kv-cache-effect:
+  en: 62e3b5b1fb6a3f75
+  zh: 2bf10533a254845e
+/banyan-ui-authoring/known-limitations-and-deferred-work:
+  en: fae5b5785c8cb7cb
+  zh: 9bbd33b589e9b396
+/banyan-ui-authoring/known-limitations-and-deferred-work/dev-note:
+  en: b836f01bd0bceb4a
+  zh: a6ea1361c4a48df0

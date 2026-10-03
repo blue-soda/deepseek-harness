@@ -13,15 +13,10 @@
  * belongs to the webserver config, and this fence is not an auth layer.
  */
 
-import type { IncomingHttpHeaders } from 'node:http'
 import { isLoopbackHostname } from './loopback-hostname.ts'
+import type { ConnectionTrustRequest } from './rpc.ts'
 
-/** The request facts the fence reads from either HTTP representation. */
-interface ApiTrustRequest {
-  headers: IncomingHttpHeaders | Headers
-}
-
-function header(headers: IncomingHttpHeaders | Headers, name: string): string | undefined {
+function header(headers: ConnectionTrustRequest['headers'], name: string): string | undefined {
   if (headers instanceof Headers) return headers.get(name) ?? undefined
   const value = headers[name]
   return typeof value === 'string' ? value : undefined
@@ -88,42 +83,12 @@ function isTrustedAuthority(hostUrl: URL, trustedHosts: readonly string[]): bool
 }
 
 /**
- * Whether a browser origin is an explicitly trusted shell origin. This is used
- * by native shells that serve the UI from one local origin while the DSH Host
- * listens on another loopback port.
- */
-export function assertTrustedOrigin(entry: string): void {
-  try {
-    const url = new URL(entry)
-    if ((url.protocol === 'http:' || url.protocol === 'https:') && url.origin === entry) return
-  } catch {
-    // fall through
-  }
-  throw new Error(`client-connection: trustedOrigins entry ${JSON.stringify(entry)} is not a canonical HTTP(S) origin`)
-}
-
-function isTrustedOrigin(originUrl: URL, trustedOrigins: readonly string[]): boolean {
-  return trustedOrigins.some(entry => {
-    try {
-      return new URL(entry).origin === originUrl.origin
-    } catch {
-      return false
-    }
-  })
-}
-
-/**
  * Decide whether one /api request may reach the RPC bridge.
  * @param request - Node HTTP or Fetch request facts (headers).
  * @param trustedHosts - non-loopback authorities this deployment serves: exact `host:port`, or port-less `host` matching any port.
- * @param trustedOrigins - browser origins explicitly trusted to call this local Host.
  * @returns true when the Host is ours (loopback or trusted) and any attached browser markers are same-origin.
  */
-export function isTrustedApiRequest(
-  request: ApiTrustRequest,
-  trustedHosts: readonly string[],
-  trustedOrigins: readonly string[] = [],
-): boolean {
+export function isTrustedApiRequest(request: ConnectionTrustRequest, trustedHosts: readonly string[]): boolean {
   // Host fence (DNS-rebinding defense), applied to every request: the browser
   // fills Host from the URL it believes it is talking to, so a rebound page
   // carries the attacker's domain here even though the socket lands on this
@@ -146,8 +111,7 @@ export function isTrustedApiRequest(
   const origin = header(request.headers, 'origin')
   if (origin === undefined) return true
   try {
-    const originUrl = new URL(origin)
-    return originUrl.host === hostUrl.host || isTrustedOrigin(originUrl, trustedOrigins)
+    return new URL(origin).host === hostUrl.host
   } catch {
     return false
   }

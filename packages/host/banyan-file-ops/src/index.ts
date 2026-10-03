@@ -7,7 +7,8 @@
 
 import { copyFile, lstat, mkdir, readFile, readdir, readlink, stat, symlink, unlink, writeFile } from 'node:fs/promises'
 import { basename, dirname, join, posix, relative, resolve, win32 } from 'node:path'
-import { Context, Service } from '@deepseek-ai/cordis'
+import { Context } from '@deepseek-ai/cordis'
+import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import { resolveDshHome } from '@deepseek-ai/dsh-home-paths'
 
 const DEFAULT_DIRECTORY_COPY_SKIP_NAMES = new Set([
@@ -25,61 +26,10 @@ const DEFAULT_DIRECTORY_COPY_SKIP_NAMES = new Set([
   'out',
 ])
 
-export interface DirectoryCopyOptions {
-  sourcePath: string
-  targetPath: string
-  overwrite?: boolean
-  skipNames?: string[]
-  signal?: AbortSignal
-}
+export type * from './types.ts'
+import type { DirectoryCopyOptions, DirectoryCopyResult, InstallBanyanSkillPackageOptions, InstallBanyanSkillPackageResult, PruneDataOptions, PruneDataResult } from './types.ts'
 
-export interface DirectoryCopyResult {
-  sourcePath: string
-  targetPath: string
-  copiedFiles: number
-  copiedDirectories: number
-  skippedEntries: number
-}
-
-export interface BanyanSkillPackageFile {
-  path: string
-  url?: string | null
-  text?: string
-}
-
-export interface InstallBanyanSkillPackageOptions {
-  directoryName: string
-  skillMd: string
-  files?: BanyanSkillPackageFile[]
-  targetRootPath?: string
-  overwrite?: boolean
-  signal?: AbortSignal
-}
-
-export interface InstallBanyanSkillPackageResult {
-  targetRootPath: string
-  installedPath: string
-  writtenFiles: number
-  skippedFiles: number
-}
-
-export interface PruneDataOptions {
-  /** Which host-local data tree to prune: session logs or the cache storage. */
-  target: 'logs' | 'cache'
-  signal?: AbortSignal
-}
-
-export interface PruneDataResult {
-  /** The resolved host account home the prune ran against. */
-  home: string
-  /** The pruned target, echoed from the request. */
-  target: 'logs' | 'cache'
-  /** Number of regular files deleted. */
-  files: number
-  /** Total bytes freed by the deletions. */
-  bytes: number
-}
-
+/** Filesystem-operation failure carrying the requested source and target paths. */
 export class BanyanFileOpsError extends Error {
   constructor(
     message: string,
@@ -195,9 +145,42 @@ declare module '@deepseek-ai/cordis' {
  * install, and pruning DSH session/state data). These run on the DSH Host, not in the
  * browser or the Banyan backend.
  */
-export default class BanyanFileOps extends Service {
+export default class BanyanFileOps extends TypertRemoteService {
   constructor(ctx: Context) {
     super(ctx, 'banyanFileOps')
+  }
+
+  /**
+   * Copy a directory through the optional Banyan Remote namespace.
+   * @param options Source, target, overwrite and exclusion policy.
+   * @param signal Caller cancellation.
+   * @returns Copied and skipped entry counts.
+   */
+  @Remote('copyDirectory')
+  copyDirectoryRemote(options: Omit<DirectoryCopyOptions, 'signal'>, signal: AbortSignal): Promise<DirectoryCopyResult> {
+    return this.copyDirectory({ ...options, signal })
+  }
+
+  /**
+   * Install a shared Skill through the optional Banyan Remote namespace.
+   * @param options Skill directory and text files.
+   * @param signal Caller cancellation.
+   * @returns Installed path and file counts.
+   */
+  @Remote('installSkillPackage')
+  installSkillPackageRemote(options: Omit<InstallBanyanSkillPackageOptions, 'signal'>, signal: AbortSignal): Promise<InstallBanyanSkillPackageResult> {
+    return this.installBanyanSkillPackage({ ...options, signal })
+  }
+
+  /**
+   * Clear Host logs or cache through the optional Banyan Remote namespace.
+   * @param request Data tree to prune.
+   * @param signal Caller cancellation.
+   * @returns Removed file and byte counts.
+   */
+  @Remote('pruneData')
+  pruneDataRemote(request: Omit<PruneDataOptions, 'signal'>, signal: AbortSignal): Promise<PruneDataResult> {
+    return this.pruneData({ ...request, signal })
   }
 
   /**

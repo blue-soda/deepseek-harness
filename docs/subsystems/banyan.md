@@ -2,29 +2,21 @@
 
 English | [中文](banyan.zh.md)
 
-Banyan contributes two host-side Cordis services to the DSH Host plugin tree. They run
-inside the DSH Host process, never in the browser or in the Banyan backend.
+Banyan contributes two host-side Cordis services to the DSH Host plugin tree. They run inside the DSH Host process, never in the browser or in the Banyan backend.
 
 ## `ctx.banyanFileOps`
 
 Filesystem operations that Banyan UI plugins need but that must run on the DSH Host.
 
-- `copyDirectory` migrates an Agent workspace by copying a directory tree to a new path, skipping
-  default ignore names; it refuses same-or-nested source/target and non-absolute paths.
-- `installBanyanSkillPackage` writes a curated skill (a `SKILL.md` plus supporting files) into the
-  DSH skills root, validating the directory segment and that every file stays under the target.
-- `pruneData` deletes DSH session logs (`target: 'logs'`, below `<DSH_HOME>/sessions`) or state
-  cache files (`target: 'cache'`, below `<DSH_HOME>/storages`), keeping directories and leaving
-  profiles, settings, skills, credentials, and per-Agent workspaces untouched.
+- `copyDirectory` migrates an Agent workspace by copying a directory tree to a new path, skipping default ignore names; it refuses same-or-nested source/target and non-absolute paths.
+- `installBanyanSkillPackage` writes a curated skill (a `SKILL.md` plus supporting files) into the DSH skills root, validating the directory segment and that every file stays under the target.
+- `pruneData` deletes DSH session logs (`target: 'logs'`, below `<DSH_HOME>/sessions`) or state cache files (`target: 'cache'`, below `<DSH_HOME>/storages`), keeping directories and leaving profiles, settings, skills, credentials, and per-Agent workspaces untouched.
 
 Source: [`packages/host/banyan-file-ops/src/index.ts`](../../packages/host/banyan-file-ops/src/index.ts)
 
 ## `ctx.mobile`
 
-Android device bridge capability. A provider registers one bridge transport; consumers execute
-named Android tools (for example screenshot, observe, tap, input, open-app) without owning HTTP,
-token, or provider-selection policy. `MobileRuntime` selects a single usable provider (or one
-configured explicitly) and exposes `health` and `execute`.
+Android device bridge capability. A provider registers one bridge transport; consumers execute named Android tools (for example screenshot, observe, tap, input, open-app) without owning HTTP, token, or provider-selection policy. `MobileRuntime` selects a single usable provider (or one configured explicitly) and exposes `health` and `execute`.
 
 Source: [`packages/mobile/mobile/src/index.ts`](../../packages/mobile/mobile/src/index.ts)
 
@@ -43,6 +35,30 @@ Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnp
 Host-side filesystem operations for Banyan UI plugins (workspace migration, skill install, and pruning DSH session/state data). These run on the DSH Host, not in the browser or the Banyan backend.
 
 ```ts cordis-catalog
+/**
+ * Copy a directory through the optional Banyan Remote namespace.
+ * @param options Source, target, overwrite and exclusion policy.
+ * @param signal Caller cancellation.
+ * @returns Copied and skipped entry counts.
+ */
+@Remote('copyDirectory') copyDirectoryRemote(options: Omit<DirectoryCopyOptions, 'signal'>, signal: AbortSignal): Promise<DirectoryCopyResult>
+
+/**
+ * Install a shared Skill through the optional Banyan Remote namespace.
+ * @param options Skill directory and text files.
+ * @param signal Caller cancellation.
+ * @returns Installed path and file counts.
+ */
+@Remote('installSkillPackage') installSkillPackageRemote(options: Omit<InstallBanyanSkillPackageOptions, 'signal'>, signal: AbortSignal): Promise<InstallBanyanSkillPackageResult>
+
+/**
+ * Clear Host logs or cache through the optional Banyan Remote namespace.
+ * @param request Data tree to prune.
+ * @param signal Caller cancellation.
+ * @returns Removed file and byte counts.
+ */
+@Remote('pruneData') pruneDataRemote(request: Omit<PruneDataOptions, 'signal'>, signal: AbortSignal): Promise<PruneDataResult>
+
 /**
  * Recursively copy a directory tree to a target path, skipping default ignore names.
  * @param options Copy source/target paths and optional overwrite/skip rules.

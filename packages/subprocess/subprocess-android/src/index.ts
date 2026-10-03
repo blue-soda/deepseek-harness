@@ -13,6 +13,7 @@ import type {
   SubprocessOutputReader,
   SubprocessSpawnSpec,
   SubprocessTerminalHandle,
+  SubprocessTerminalEnvironment,
   SubprocessTerminalSpawnSpec,
 } from '@deepseek-ai/dsh-subprocess'
 import type {} from '@deepseek-ai/dsh-mobile'
@@ -20,6 +21,7 @@ import type {} from '@deepseek-ai/dsh-mobile'
 export const name = 'subprocess-android'
 export const inject = ['mobile']
 
+/** Android shell bridge settings. */
 export interface Config {
   /** Bridge shell mode: safe, approval, or max. */
   mode?: AndroidShellMode
@@ -43,7 +45,9 @@ interface AndroidShellResult {
 const DEFAULT_MAX_OUTPUT_BYTES = 64 * 1024
 const SHELL_MODES = new Set<AndroidShellMode>(['safe', 'approval', 'max'])
 
+/** Runs collected subprocess requests through the Android shell bridge. */
 export class AndroidSubprocessRuntime extends SubprocessRuntime {
+  static inject = ['mobile']
   private readonly mode: AndroidShellMode
   private readonly workspaceRoot: string | undefined
   private readonly maxOutputBytes: number
@@ -104,6 +108,16 @@ export class AndroidSubprocessRuntime extends SubprocessRuntime {
     return Promise.reject(new Error('subprocess-android: terminal PTY allocation is not supported by the Android bridge yet'))
   }
 
+  /**
+   * Report the Android bridge's POSIX shell environment.
+   * @param signal Caller cancellation.
+   * @returns POSIX platform and Android system shell.
+   */
+  terminalEnvironment(signal?: AbortSignal): Promise<SubprocessTerminalEnvironment> {
+    signal?.throwIfAborted()
+    return Promise.resolve({ platform: 'posix', defaultShell: '/system/bin/sh' })
+  }
+
   private async run(spec: SubprocessSpawnSpec): Promise<AndroidShellResult> {
     const timeoutMs = Math.max(100, Math.min(spec.graceMs + 60_000, 60_000))
     const command = commandFromArgv(spec.argv)
@@ -132,6 +146,7 @@ export class AndroidSubprocessRuntime extends SubprocessRuntime {
 }
 
 class AndroidSubprocessHandle implements SubprocessHandle {
+  readonly control = undefined
   readonly pid = -1
   readonly stdin: Writable | undefined = undefined
   readonly stdout: Readable | undefined = undefined
@@ -189,6 +204,10 @@ class BufferedOutputReader implements SubprocessOutputReader {
   }
 }
 
+/** Convert an argv request to an Android shell command.
+ * @param argv - Program and arguments.
+ * @returns Command text, preserving shell -c payloads.
+ */
 export function commandFromArgv(argv: readonly string[]): string {
   const [program, ...args] = argv
   if (program === undefined || program.length === 0) throw new Error('subprocess-android: argv must contain a program')
@@ -200,6 +219,11 @@ export function commandFromArgv(argv: readonly string[]): string {
   return argv.map(quoteShell).join(' ')
 }
 
+/** Resolve a bridge working directory relative to its workspace.
+ * @param cwd - Requested working directory.
+ * @param workspaceRoot - Android workspace root, when known.
+ * @returns Relative working directory, or the workspace default for outside absolute paths.
+ */
 export function cwdRelativeToWorkspace(cwd: string, workspaceRoot: string | undefined): string {
   if (cwd.length === 0 || cwd === '.') return '.'
   if (workspaceRoot === undefined || workspaceRoot.length === 0) return cwd.startsWith('/') ? '.' : cwd

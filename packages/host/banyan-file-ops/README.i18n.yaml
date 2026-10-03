@@ -1,6 +1,31 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/host/banyan-file-ops/README.md
-README.md: a3dcb0e6660cc713aff499506217f98352f581a9
-README.zh.md: e3b1496ca0956d6e106e3e254e6192d3a1c3a64b
+/:
+  en: 4c8476772c664ebd
+  zh: d443fad623859c9f
+/blue-soda-dsh-host-banyan-file-ops:
+  en: 06b0bb5efc7920ce
+  zh: d79813a5ef6f3084
+/blue-soda-dsh-host-banyan-file-ops/summary:
+  en: dc5590355635e968
+  zh: 0ac310918e0230dc
+/blue-soda-dsh-host-banyan-file-ops/table-of-contents:
+  en: 2e89ddb1e73218cb
+  zh: 8a6bc778724bb498
+/blue-soda-dsh-host-banyan-file-ops/use-this-package:
+  en: b11af3b4e599b81b
+  zh: 061cc2c27f6c4c7c
+/blue-soda-dsh-host-banyan-file-ops/model-experience:
+  en: c1f026759ed32cfd
+  zh: c1f026759ed32cfd
+/blue-soda-dsh-host-banyan-file-ops/model-experience/kv-cache-effect:
+  en: 14e154d457e058f9
+  zh: 796a41a56f301ce2
+/blue-soda-dsh-host-banyan-file-ops/known-limitations-and-deferred-work:
+  en: 5f8581bfa49e6924
+  zh: f1bd2f1c546c590a
+/blue-soda-dsh-host-banyan-file-ops/known-limitations-and-deferred-work/dev-note:
+  en: b836f01bd0bceb4a
+  zh: a6ea1361c4a48df0

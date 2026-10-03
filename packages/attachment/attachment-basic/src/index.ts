@@ -11,8 +11,11 @@ import type {
 
 /** Minimal attachment backend configuration. */
 export interface Config {
+  /** Maximum accepted bytes in one image. */
   maxImageBytes?: number
+  /** Maximum image count in one message. */
   maxImagesPerMessage?: number
+  /** Maximum combined image bytes in one message. */
   maxMessageImageBytes?: number
 }
 

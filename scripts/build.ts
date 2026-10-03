@@ -6,8 +6,9 @@ import { resolve } from 'node:path'
 import { parseArgs } from 'node:util'
 import {
   CLIENT_BUILD_RECORD_PATH,
+  CLIENT_BUILD_PROFILE_SELECTOR,
   clientBuildProcessEnvironment,
-  repositoryCommitHash,
+  repositoryClientBuildEnvironment,
   resolveClientBuildEnvironment,
   writeClientBuildRecord,
 } from './client-build-environment.ts'
@@ -29,19 +30,22 @@ function runScript(script: string, environment: NodeJS.ProcessEnv): void {
 
 /** Run the full build selected by `--profile` or `DSH_BUILD_CLIENT_PROFILE`. */
 function main(): void {
+  // tsdown.config.ts loads only through Node type stripping (`--config-loader native`); this names the cause before tsdown fails.
+  if (!process.features.typescript) {
+    throw new Error('build: Node.js TypeScript type stripping is unavailable in this Node.js process; remove --no-experimental-strip-types from NODE_OPTIONS or use a Node.js build with TypeScript support')
+  }
   const { values } = parseArgs({
     options: { profile: { type: 'string' } },
     allowPositionals: false,
   })
   const root = resolve(import.meta.dirname, '..')
-  const parentEnvironment = {
-    ...process.env,
-    DSH_CLIENT_COMMIT_HASH: repositoryCommitHash(root, process.env),
-  }
-  const clientEnvironment = resolveClientBuildEnvironment(parentEnvironment, values.profile)
-  const buildEnvironment = clientBuildProcessEnvironment(parentEnvironment, clientEnvironment)
+  const repositoryEnvironment = repositoryClientBuildEnvironment(root, process.env)
+  const profile = values.profile ?? process.env[CLIENT_BUILD_PROFILE_SELECTOR]
+  const clientEnvironment = resolveClientBuildEnvironment(repositoryEnvironment, profile)
+  const buildEnvironment = clientBuildProcessEnvironment(process.env, clientEnvironment)
 
   rmSync(resolve(root, CLIENT_BUILD_RECORD_PATH), { force: true })
+  runScript('build:native-system', buildEnvironment)
   runScript('build:lib', buildEnvironment)
   runScript('build:web', buildEnvironment)
   const record = writeClientBuildRecord(root, clientEnvironment)

@@ -1,0 +1,40 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/extensions/tool-banyan-ops/README.md
+/:
+  en: a06459bb9c70d536
+  zh: 6dc4d6cf2c95d719
+/deepseek-ai-dsh-tool-banyan-ops:
+  en: d2986828562d1e54
+  zh: 07d2a966492b2dc3
+/deepseek-ai-dsh-tool-banyan-ops/summary:
+  en: b1988768620db090
+  zh: b940166ef70e626c
+/deepseek-ai-dsh-tool-banyan-ops/table-of-contents:
+  en: 2e89ddb1e73218cb
+  zh: 8a6bc778724bb498
+/deepseek-ai-dsh-tool-banyan-ops/use-this-package:
+  en: 3dec5fdacd7bd470
+  zh: 32cff3d323e52773
+/deepseek-ai-dsh-tool-banyan-ops/model-experience:
+  en: 215e7ba838619b7b
+  zh: 215e7ba838619b7b
+/deepseek-ai-dsh-tool-banyan-ops/model-experience/tools-and-guidance:
+  en: fb0012f250a0df18
+  zh: fb0012f250a0df18
+/deepseek-ai-dsh-tool-banyan-ops/model-experience/tools-and-guidance/what-the-model-sees:
+  en: 49dd1ba5fd2834f5
+  zh: 53a1111e13a4b524
+/deepseek-ai-dsh-tool-banyan-ops/model-experience/tools-and-guidance/token-effect:
+  en: 97b80d18f52cde39
+  zh: c32fe6fe609097ce
+/deepseek-ai-dsh-tool-banyan-ops/model-experience/tools-and-guidance/kv-cache-effect:
+  en: 3b4f95af073b2015
+  zh: d77215349ee2c494
+/deepseek-ai-dsh-tool-banyan-ops/known-limitations-and-deferred-work:
+  en: 51f3412f95f6e2e3
+  zh: 24f49ddf7a41de05
+/deepseek-ai-dsh-tool-banyan-ops/known-limitations-and-deferred-work/dev-note:
+  en: b836f01bd0bceb4a
+  zh: a6ea1361c4a48df0

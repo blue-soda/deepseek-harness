@@ -9,7 +9,7 @@
   ],
   "references": [
     {
-      "path": "../../../vendor/cosmokit"
+      "path": "../../llm/llm"
     },
     {
       "path": "../../../vendor/cordis"
@@ -18,16 +18,16 @@
       "path": "../../../vendor/schemastery"
     },
     {
-      "path": "../../core/tools"
+      "path": "../../attachment/attachment"
     },
     {
-      "path": "../../core/system-prompt"
+      "path": "../../core/tools"
     },
     {
       "path": "../mobile"
     },
     {
-      "path": "../../runtime-diagnostics/invariants"
+      "path": "../../core/system-prompt"
     }
   ]
 }

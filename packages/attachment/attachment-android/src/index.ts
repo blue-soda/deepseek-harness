@@ -10,22 +10,32 @@ import type {
   ImageAttachmentLimits,
   ImageAttachmentRef,
   ImageMediaType,
-  ImageRequestPolicy,
+  ImageRequestTarget,
   RequestImageAttachment,
   SaveImageAttachment,
   StoredImageAttachment,
 } from '@deepseek-ai/dsh-attachment'
 import { resolveDshHome } from '@deepseek-ai/dsh-home-paths'
 
+/** Android attachment storage limits and bridge connection settings. */
 export interface Config {
+  /** Harness home containing durable Android attachments. */
   dshHome?: string
+  /** Maximum accepted bytes in one image. */
   maxImageBytes?: number
+  /** Maximum image count in one message. */
   maxImagesPerMessage?: number
+  /** Maximum combined image bytes in one message. */
   maxMessageImageBytes?: number
+  /** Maximum decoded pixel count in one image. */
   maxImagePixels?: number
+  /** Maximum image width or height in pixels. */
   maxImageDimension?: number
+  /** Android bridge base URL for image conversion. */
   bridgeBaseUrl?: string
+  /** Android bridge authentication token. */
   bridgeToken?: string
+  /** Maximum bridge request duration in milliseconds. */
   bridgeTimeoutMs?: number
 }
 
@@ -42,7 +52,9 @@ interface ImageMetadata {
   readonly height: number
 }
 
+/** Persists images without native codecs and projects them through an optional Android bridge. */
 export class AndroidAttachmentStore extends AttachmentStore {
+  /** Directory containing host-side content-addressed image objects. */
   readonly root: string
   readonly imageLimits: ImageAttachmentLimits
   private readonly bridge: AndroidAttachmentBridge | undefined
@@ -116,15 +128,21 @@ export class AndroidAttachmentStore extends AttachmentStore {
     return { ref, data }
   }
 
+  /** Read an image within the selected route dimensions and byte budget.
+   * @param ref - Persisted image identity and metadata.
+   * @param policy - Target dimensions and maximum encoded bytes.
+   * @param signal - Optional cancellation signal.
+   * @returns Verified image bytes and request-variant metadata.
+   */
   override async readImageRequest(
     ref: ImageAttachmentRef,
-    policy: ImageRequestPolicy,
+    policy: ImageRequestTarget,
     signal?: AbortSignal,
   ): Promise<RequestImageAttachment> {
     validatePolicy(policy)
     if (this.bridge !== undefined) return this.bridge.readImageRequest(ref, policy, signal)
     const stored = await this.readImage(ref, signal)
-    if (stored.data.byteLength > policy.maxBytes || ref.width * ref.height > policy.maxPixels) {
+    if (stored.data.byteLength > policy.maxBytes || ref.width > policy.width || ref.height > policy.height) {
       throw new AttachmentError(
         'Android attachment exceeds this model route request-image budget; Kotlin-side resizing is required.',
         'IMAGE_TOO_LARGE',
@@ -132,7 +150,8 @@ export class AndroidAttachmentStore extends AttachmentStore {
     }
     const variantId = ImageVariantId(`sha256:${digest(JSON.stringify({
       androidAttachment: ref.attachmentId,
-      maxPixels: policy.maxPixels,
+      targetWidth: policy.width,
+      targetHeight: policy.height,
       maxBytes: policy.maxBytes,
       passthrough: true,
     }))}`)
@@ -227,7 +246,7 @@ class AndroidAttachmentBridge {
 
   async readImageRequest(
     ref: ImageAttachmentRef,
-    policy: ImageRequestPolicy,
+    policy: ImageRequestTarget,
     signal?: AbortSignal,
   ): Promise<RequestImageAttachment> {
     const result = await this.execute('attachment.read_image', 'read_only', {
@@ -236,7 +255,9 @@ class AndroidAttachmentBridge {
       bytes: ref.bytes,
       width: ref.width,
       height: ref.height,
-      maxPixels: policy.maxPixels,
+      maxPixels: policy.width * policy.height,
+      targetWidth: policy.width,
+      targetHeight: policy.height,
       maxBytes: policy.maxBytes,
       ...ref.name === undefined ? {} : { name: ref.name },
     }, signal, 'ATTACHMENT_READ_FAILED')
@@ -250,13 +271,14 @@ class AndroidAttachmentBridge {
     if (metadata.mediaType !== image.mediaType || metadata.width !== image.width || metadata.height !== image.height) {
       throw new AttachmentError('Android bridge returned request-image metadata that does not match bytes.', 'ATTACHMENT_CORRUPT')
     }
-    if (image.width * image.height > policy.maxPixels || image.bytes > policy.maxBytes) {
+    if (image.width > policy.width || image.height > policy.height || image.bytes > policy.maxBytes) {
       throw new AttachmentError('Android bridge returned a request image outside the model route budget.', 'IMAGE_TOO_LARGE')
     }
     const variantId = ImageVariantId(`sha256:${digest(JSON.stringify({
       androidAttachment: ref.attachmentId,
       requestAttachment: image.attachmentId,
-      maxPixels: policy.maxPixels,
+      targetWidth: policy.width,
+      targetHeight: policy.height,
       maxBytes: policy.maxBytes,
     }))}`)
     return {
@@ -352,9 +374,9 @@ function parseImageRef(value: unknown, path: string): ImageAttachmentRef {
   }
 }
 
-function validatePolicy(policy: ImageRequestPolicy): void {
-  if (!Number.isSafeInteger(policy.maxPixels) || policy.maxPixels < 1) {
-    throw new AttachmentError('Image request maxPixels must be a positive integer.', 'INVALID_ATTACHMENT_REF')
+function validatePolicy(policy: ImageRequestTarget): void {
+  if (!Number.isSafeInteger(policy.width) || policy.width < 1 || !Number.isSafeInteger(policy.height) || policy.height < 1) {
+    throw new AttachmentError('Image request width and height must be positive integers.', 'INVALID_ATTACHMENT_REF')
   }
   if (!Number.isSafeInteger(policy.maxBytes) || policy.maxBytes < 1) {
     throw new AttachmentError('Image request maxBytes must be a positive integer.', 'INVALID_ATTACHMENT_REF')
