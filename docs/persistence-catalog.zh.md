@@ -664,11 +664,11 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 
 ```ts persistence-catalog
 /**
- * The outcome of a prior `mobile/approval-requested`.
- * Log-only audit facts for reconstructing human confirmation flow.
- */
+   * The outcome of a prior `mobile/approval-requested`.
+   * Log-only audit facts for reconstructing human confirmation flow.
+   */
 'mobile/approval-decided': {
-  /** DSH tool call identity that owns this mobile approval request. */
+/** DSH tool call identity that owns this mobile approval request. */
   callId: ToolCallId
   /** Android bridge request id carrying the approval dialog. */
   requestId: string
@@ -691,11 +691,11 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 
 ```ts persistence-catalog
 /**
- * A mobile `user.confirm` tool call asked the Android user for a decision.
- * Log-only and tool-private; the model sees only the normal tool result.
- */
+   * A mobile `user.confirm` tool call asked the Android user for a decision.
+   * Log-only and tool-private; the model sees only the normal tool result.
+   */
 'mobile/approval-requested': {
-  /** DSH tool call identity that owns this mobile approval request. */
+/** DSH tool call identity that owns this mobile approval request. */
   callId: ToolCallId
   /** Android bridge request id carrying the approval dialog. */
   requestId: string
@@ -718,12 +718,12 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 
 ```ts persistence-catalog
 /**
- * Mobile bridge reachability observed immediately before a tool execution.
- * Log-only: this does not change model context, but lets replay distinguish
- * bridge-tool failures from bridge availability drift.
- */
+   * Mobile bridge reachability observed immediately before a tool execution.
+   * Log-only: this does not change model context, but lets replay distinguish
+   * bridge-tool failures from bridge availability drift.
+   */
 'mobile/bridge-connected': {
-  /** DSH tool call identity whose execution observed the bridge. */
+/** DSH tool call identity whose execution observed the bridge. */
   callId: ToolCallId
   /** Android bridge request id about to be executed. */
   requestId: string
@@ -748,12 +748,12 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 
 ```ts persistence-catalog
 /**
- * Mobile bridge health could not be observed before a tool execution.
- * Log-only: the paired `mobile/tool-result` still records the final tool
- * outcome when execution is attempted.
- */
+   * Mobile bridge health could not be observed before a tool execution.
+   * Log-only: the paired `mobile/tool-result` still records the final tool
+   * outcome when execution is attempted.
+   */
 'mobile/bridge-disconnected': {
-  /** DSH tool call identity whose execution observed the bridge failure. */
+/** DSH tool call identity whose execution observed the bridge failure. */
   callId: ToolCallId
   /** Android bridge request id about to be executed. */
   requestId: string
@@ -777,20 +777,20 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
  * Tool-private Android bridge request facts for reconstructing mobile I/O
  * without changing the generic model-facing `tool/call` surface event.
  */
-'mobile/tool-request': {
+  'mobile/tool-request': {
   /** DSH tool call identity that owns this bridge request. */
-  callId: ToolCallId
-  /** Android bridge request id, usually the same value as `callId`. */
-  requestId: string
-  /** Android bridge tool name, for example `screen.observe` or `input.tap`. */
-  tool: string
-  /** Safety class declared for the Android bridge request. */
-  risk: MobileToolRisk
-  /** Lossless JSON string of the Android bridge arguments sent to the phone. */
-  argumentsJson: string
-  /** Session id forwarded to the Android bridge, when present. */
-  bridgeSessionId?: string
-}
+    callId: ToolCallId
+    /** Android bridge request id, usually the same value as `callId`. */
+    requestId: string
+    /** Android bridge tool name, for example `screen.observe` or `input.tap`. */
+    tool: string
+    /** Safety class declared for the Android bridge request. */
+    risk: MobileToolRisk
+    /** Lossless JSON string of the Android bridge arguments sent to the phone. */
+    argumentsJson: string
+    /** Session id forwarded to the Android bridge, when present. */
+    bridgeSessionId?: string
+  }
 ```
 
 类型：[ToolCallId](subsystems/core.zh.md)
@@ -803,11 +803,11 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 
 ```ts persistence-catalog
 /**
- * Tool-private Android bridge response facts for reconstructing mobile I/O
- * without changing the generic model-facing `tool/result` surface event.
- */
+   * Tool-private Android bridge response facts for reconstructing mobile I/O
+   * without changing the generic model-facing `tool/result` surface event.
+   */
 'mobile/tool-result': {
-  /** DSH tool call identity that owns this bridge response. */
+/** DSH tool call identity that owns this bridge response. */
   callId: ToolCallId
   /** Android bridge request id paired with `mobile/tool-request`. */
   requestId: string

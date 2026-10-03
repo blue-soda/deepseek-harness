@@ -894,7 +894,7 @@ async function attachBridgeScreenshot(
 }
 
 function parseScreenshotResult(resultJson: string): BridgeScreenshotCapture {
-  const value = JSON.parse(resultJson) as unknown
+  const value: unknown = JSON.parse(resultJson)
   const record = objectArgs(value)
   const mediaType = requiredString(record, 'mediaType')
   if (!SCREENSHOT_MEDIA_TYPES.has(mediaType)) {
@@ -1492,7 +1492,7 @@ async function executeVisualAction(
 
   const request = visualActionToBridgeRequest(config, action, exec)
   const output = await executeAndroidTool(ctx, request, exec)
-  return output as unknown as Record<string, unknown>
+  return { ...output }
 }
 
 function visualActionToBridgeRequest(

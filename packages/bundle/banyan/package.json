@@ -1,7 +1,6 @@
 {
   "name": "@blue-soda/dsh-banyan",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
   "description": "Optional Banyan Host services and mobile, search, and operations presets",
   "dsh": {
@@ -64,5 +63,13 @@
     "@deepseek-ai/dsh-skill": "workspace:*",
     "@deepseek-ai/dsh-cordis-host-runner": "workspace:*",
     "@deepseek-ai/dsh-agent": "workspace:*"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
+    "directory": "packages/bundle/banyan"
   }
 }

@@ -80,7 +80,7 @@ function resultText(result: { content: { type: string; text?: string }[] }): str
 
 function fakeAgent(ctx: Context, id: string): Agent {
   const session = ctx.sessions.create(SessionId(id))
-  return { id: session.id, session } as unknown as Agent
+  return { id: session.id, session } as Agent
 }
 
 describe('dsh-tool-mobile parser helpers', () => {
